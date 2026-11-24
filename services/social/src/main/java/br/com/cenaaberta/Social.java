@@ -378,6 +378,30 @@ public class Social {
         (select v.contains_spoiler from review_spoiler_vote v where v.author=l.actor and v.title=l.title and v.voter=?)
         """;
 
+    private static final String FEED_SOURCE = " from library l join profile p on p.actor=l.actor "
+        + "where l.review is not null and l.evaluation_public and not l.hidden and p.active ";
+
+    @GetMapping("/public-review-titles")
+    List<String> publicReviewTitles(){
+        return db.queryForList("select distinct l.title"+FEED_SOURCE+"order by l.title",String.class);
+    }
+
+    @PostMapping("/public-release-reviews")
+    List<Map<String,Object>> releaseReviews(@RequestBody List<String> ids,@RequestHeader(value="X-Actor",required=false) String viewer){
+        if(ids.isEmpty()) return List.of();
+        if(ids.size()>40) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        var params=new ArrayList<Object>();
+        params.add(viewer);params.add(viewer);params.addAll(ids);
+        return db.queryForList("select l.title,p.username,p.name,p.avatar,l.review,l.review_published_at,"
+            +"case when l.title like 'tmdb-tv-%' then (select avg(s.season_score) from "
+            +"(select e.actor,e.title,e.season,avg(e.rating) as season_score from episode_rating e group by e.actor,e.title,e.season) s "
+            +"where s.actor=l.actor and s.title=l.title) else l.rating end as rating,"
+            +"case when l.actor=? or exists(select 1 from library w where w.actor=? and w.title=l.title and w.watched) "
+            +"then false else "+EFFECTIVE_SPOILER+" end as spoiler"+FEED_SOURCE
+            +"and l.title in ("+String.join(",",Collections.nCopies(ids.size(),"?"))+") "
+            +"order by l.review_published_at desc nulls last,l.title,p.username limit 50",params.toArray());
+    }
+
     private List<Map<String,Object>> publicReviews(String actor,String id,boolean series) {
         return db.queryForList("select p.username,p.name,p.avatar,case when ? then null else l.rating end as rating,"
             + "l.review,l.version,"+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote "
@@ -530,7 +554,7 @@ public class Social {
                     fail(HttpStatus.CONFLICT,"Resenha alterada. Atualize a página.");
                 }
 
-                db.update("update library set review=?,spoiler=?,version=version+1 where actor=? and title=?",review.isBlank()?null:review,Boolean.TRUE.equals(input.spoiler()),actor,id);
+                db.update("update library set review_published_at=case when ? then null when review is null then CURRENT_TIMESTAMP else review_published_at end,review=?,spoiler=?,version=version+1 where actor=? and title=?",review.isBlank(),review.isBlank()?null:review,Boolean.TRUE.equals(input.spoiler()),actor,id);
 
                 if (!Objects.equals(review.isBlank()?null:review,old.get("review")))
                     db.update("delete from review_spoiler_vote where author=? and title=?",actor,id);

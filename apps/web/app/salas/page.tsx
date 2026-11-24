@@ -10,6 +10,6 @@ export default async function Rooms({searchParams}:{searchParams:Promise<{sala?:
   const next=id?"/salas?sala="+id:"/salas";
   const session=await getServerSession(authOptions) as {actor?:string}|null;
   if(!session?.actor)redirect("/conta?next="+encodeURIComponent(next));
-  await requireProfile(session.actor,next);
-  return <MovieRoom id={id}/>;
+  const {name,avatar}=await requireProfile(session.actor,next);
+  return <MovieRoom id={id} profile={{name,avatar}}/>;
 }

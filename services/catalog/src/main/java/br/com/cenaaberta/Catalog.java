@@ -66,7 +66,82 @@ public class Catalog {
 
     public record Details(List<String> genres, Integer runtime, Integer seasons, Integer episodes,
 
-                          List<String> directors, List<String> creators, List<String> cast) {}
+                          List<String> directors, List<String> creators, List<String> cast,
+                          List<PersonCredit> people) {
+        Details(List<String> genres,Integer runtime,Integer seasons,Integer episodes,List<String> directors,List<String> creators,List<String> cast){
+            this(genres,runtime,seasons,episodes,directors,creators,cast,List.of());
+        }
+    }
+
+    public record PersonCredit(long id,String name,String photo,List<String> roles,boolean castMember) {}
+    public record WorkCredit(String id,String title,String date,String poster,List<String> roles) {}
+    public record Person(long id,String name,String photo,String biography,String birthday,String deathday,String birthplace,List<WorkCredit> works) {}
+
+    private static String posterUrl(JsonNode item,String size){
+        String path=item.path("poster_path").asText("");
+        return path.matches("/[A-Za-z0-9._-]+")?"https://image.tmdb.org/t/p/"+size+path:null;
+    }
+
+    private static String portrait(JsonNode item){
+        String path=item.path("profile_path").asText("");
+        return path.matches("/[A-Za-z0-9._-]+")?"https://image.tmdb.org/t/p/w185"+path:null;
+    }
+
+    private static String text(JsonNode item,String field){ return item.path(field).asText(""); }
+
+    private static void addPerson(Map<Long,PersonCredit> group,JsonNode item,List<String> roles,boolean acting){
+        long id=item.path("id").asLong();
+        if(id<=0||text(item,"name").isBlank()||roles.isEmpty())return;
+        var person=group.computeIfAbsent(id,key->new PersonCredit(id,text(item,"name"),portrait(item),new ArrayList<>(),acting));
+        for(String role:roles)if(!role.isBlank()&&!person.roles().contains(role))person.roles().add(role);
+    }
+
+    private static List<String> roles(JsonNode item,boolean acting){
+        String field=acting?"character":"job";
+        var result=new LinkedHashSet<String>();
+        for(var entry:item.path(acting?"roles":"jobs")){
+            if(!text(entry,field).isBlank())result.add(text(entry,field));
+        }
+        if(!text(item,field).isBlank())result.add(text(item,field));
+        if(acting&&result.isEmpty())result.add("Acting");
+        return List.copyOf(result);
+    }
+
+    static List<PersonCredit> people(JsonNode item){
+        var cast=new LinkedHashMap<Long,PersonCredit>();
+        var crew=new LinkedHashMap<Long,PersonCredit>();
+        var credits=item.path("aggregate_credits").isObject()?item.path("aggregate_credits"):item.path("credits");
+        for(var row:credits.path("cast"))addPerson(cast,row,roles(row,true),true);
+        for(var row:item.path("created_by"))addPerson(crew,row,List.of("Creator"),false);
+        for(var row:credits.path("crew"))addPerson(crew,row,roles(row,false),false);
+        var result=new ArrayList<>(cast.values());
+        result.addAll(crew.values());
+        return result;
+    }
+
+    @GetMapping("/people/{id:[1-9][0-9]*}")
+    Person person(@PathVariable long id){
+        if(token.isBlank())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        var data=remote("/person/"+id+"?append_to_response=combined_credits");
+        return new Person(id,text(data,"name"),portrait(data),text(data,"biography"),text(data,"birthday"),
+            text(data,"deathday"),text(data,"place_of_birth"),filmography(data.path("combined_credits")));
+    }
+
+    static List<WorkCredit> filmography(JsonNode credits){
+        var works=new LinkedHashMap<String,WorkCredit>();
+        for(String group:List.of("cast","crew"))for(var row:credits.path(group)){
+            String type=text(row,"media_type");
+            long id=row.path("id").asLong();
+            if(id<=0||row.path("adult").asBoolean()||!(type.equals("movie")||type.equals("tv")))continue;
+            boolean movie=type.equals("movie");
+            String title=text(row,movie?"title":"name");
+            if(title.isBlank())continue;
+            String key="tmdb-"+type+"-"+id;
+            var work=works.computeIfAbsent(key,k->new WorkCredit(k,title,text(row,movie?"release_date":"first_air_date"),posterUrl(row,"w185"),new ArrayList<>()));
+            for(String role:roles(row,group.equals("cast")))if(!work.roles().contains(role))work.roles().add(role);
+        }
+        return works.values().stream().sorted(Comparator.comparing(WorkCredit::date).reversed().thenComparing(WorkCredit::title)).toList();
+    }
 
     private final JdbcTemplate db;
 
@@ -310,6 +385,40 @@ public class Catalog {
 
 
 
+    public record TimelineEntry(String key,String work,String title,String date,String kind,String poster) {}
+
+    @GetMapping("/chronology/{id}")
+    List<TimelineEntry> chronology(@PathVariable String id){
+        if(!id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}"))throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if(token.isBlank())throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        String[] parts=id.split("-");
+        boolean movie=parts[1].equals("movie");
+        String path="/"+parts[1]+"/"+parts[2];
+        JsonNode work=remote(path);
+        var result=new LinkedHashMap<String,TimelineEntry>();
+        result.put(id,new TimelineEntry(id,id,text(work,movie?"title":"name"),text(work,movie?"release_date":"first_air_date"),movie?"Filme":"Série",posterUrl(work,"w185")));
+        if(movie){
+            long collection=work.path("belongs_to_collection").path("id").asLong();
+            if(collection>0)for(var item:remote("/collection/"+collection).path("parts")){
+                long tmdb=item.path("id").asLong();
+                if(tmdb<=0||item.path("adult").asBoolean()||text(item,"title").isBlank())continue;
+                String key="tmdb-movie-"+tmdb;
+                result.putIfAbsent(key,new TimelineEntry(key,key,text(item,"title"),text(item,"release_date"),"Filme da coleção",posterUrl(item,"w185")));
+            }
+        }else{
+            boolean specials=false;
+            for(var season:work.path("seasons"))if(season.path("season_number").asInt(-1)==0&&season.path("episode_count").asInt()>0)specials=true;
+            if(specials)for(var ep:remote(path+"/season/0").path("episodes")){
+                String title=text(ep,"name");
+                if(title.isBlank())continue;
+                String key=id+"-special-"+ep.path("episode_number").asInt();
+                boolean ova=java.util.regex.Pattern.compile("(?iu)\\b(?:OVA|OAV|OAD)\\b").matcher(title).find();
+                result.put(key,new TimelineEntry(key,null,title,text(ep,"air_date"),ova?"OVA":"Especial",posterUrl(work,"w185")));
+            }
+        }
+        return List.copyOf(result.values());
+    }
+
     @GetMapping("/titles/{id}") Title detail(@PathVariable String id) {
 
         var sample = fixtures.stream().filter(t -> t.id().equals(id)).findFirst();
@@ -330,7 +439,7 @@ public class Catalog {
 
         },id);
 
-        if (!stored.isEmpty() && (stored.getFirst().details()!=null || token.isBlank())) return stored.getFirst();
+        if (!stored.isEmpty() && ((stored.getFirst().details()!=null && stored.getFirst().details().people()!=null) || token.isBlank())) return stored.getFirst();
 
         if (token.isBlank() || !id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}")) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
 
@@ -340,7 +449,7 @@ public class Catalog {
 
         try {
 
-            JsonNode item=remote("/" + parts[1] + "/" + parts[2] + "?append_to_response=credits");
+            JsonNode item=remote("/" + parts[1] + "/" + parts[2] + (parts[1].equals("tv")?"?append_to_response=credits,aggregate_credits":"?append_to_response=credits"));
 
             title=mapped(parts[1],item).withDetails(details(parts[1],item));
 
@@ -412,7 +521,7 @@ public class Catalog {
 
             movie?null:positive(item.path("number_of_seasons")),movie?null:positive(item.path("number_of_episodes")),
 
-            movie?names(credits.path("crew"),"Director",5):List.of(),names(item.path("created_by"),null,5),names(credits.path("cast"),null,8));
+            movie?names(credits.path("crew"),"Director",5):List.of(),names(item.path("created_by"),null,5),names(credits.path("cast"),null,8),people(item));
 
     }
 
@@ -471,6 +580,50 @@ public class Catalog {
         if (encoded != null && (existing.isEmpty() || !encoded.equals(existing.getFirst()))) {
             db.update("update title set genre_ids=? where id=?", encoded, title.id());
         }
+    }
+
+    public record ReviewRelease(String id,String name,java.time.LocalDate released,String poster) {}
+
+    @PostMapping("/review-releases")
+    List<ReviewRelease> reviewReleases(@RequestBody List<String> ids) {
+        if(ids.size()>40) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        var today=java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"));
+        var result=new ArrayList<ReviewRelease>();
+        for(String id:new LinkedHashSet<>(ids)){
+            if(!id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}")) continue;
+            var cached=db.query("select d.name,d.released,t.poster from review_release_date d left join title t on t.id=d.title where d.title=? and d.checked_at>?",
+                (r,n)->new ReviewRelease(id,r.getString(1),r.getObject(2,java.time.LocalDate.class),r.getString(3)),
+                id,java.time.OffsetDateTime.now().minusDays(7));
+            ReviewRelease release;
+            if(!cached.isEmpty()) release=cached.getFirst();
+            else {
+                var years=db.queryForList("select release_year from title where id=?",String.class,id);
+                if(!years.isEmpty() && years.getFirst()!=null && years.getFirst().matches("[0-9]{4}")
+                        && !years.getFirst().equals(Integer.toString(today.getYear()))) continue;
+                if(token.isBlank()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+                var parts=id.split("-");
+                JsonNode item;
+                try { item=remote("/"+parts[1]+"/"+parts[2]); }
+                catch(ResponseStatusException ex){
+                    if(ex.getStatusCode().value()!=404) throw ex;
+                    item=mapper.createObjectNode();
+                }
+                String date=item.path(parts[1].equals("movie")?"release_date":"first_air_date").asText("");
+                var work=mapped(parts[1],item);
+                if(!date.isBlank()) storeSummary(work,item);
+                release=new ReviewRelease(id,work.name(),
+                    date.isBlank()?null:java.time.LocalDate.parse(date),work.poster());
+                if(db.update("update review_release_date set name=?,released=?,checked_at=CURRENT_TIMESTAMP where title=?",
+                        release.name(),release.released(),id)==0){
+                    try { db.update("insert into review_release_date(title,name,released,checked_at) values(?,?,?,CURRENT_TIMESTAMP)",
+                        id,release.name(),release.released()); }
+                    catch(org.springframework.dao.DuplicateKeyException concurrentInsert){ /* Another reader populated the cache. */ }
+                }
+            }
+            if(release.released()!=null && !release.released().isBefore(today.withDayOfMonth(1)) && !release.released().isAfter(today))
+                result.add(release);
+        }
+        return result;
     }
 
     @GetMapping("/title-batch") List<Title> batch(@RequestParam List<String> ids,@RequestParam(defaultValue="0") int genre,@RequestParam(required=false) List<Integer> genres) {
@@ -609,7 +762,7 @@ public class Catalog {
 
         String name = item.path(format.equals("movie") ? "title" : "name").asText("");
 
-        String poster = item.path("poster_path").asText("");
+
 
         return new Title("tmdb-" + format + "-" + item.path("id").asLong(),format,animation && item.path("original_language").asText().equals("ja"),
 
@@ -617,7 +770,7 @@ public class Catalog {
 
             date.length() >= 4 ? date.substring(0,4) : "",item.path("overview").asText(""),
 
-            poster.matches("/[A-Za-z0-9._-]+") ? "https://image.tmdb.org/t/p/w500" + poster : null);
+            posterUrl(item,"w500"));
 
     }
 

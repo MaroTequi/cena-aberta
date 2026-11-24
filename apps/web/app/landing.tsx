@@ -2,8 +2,9 @@ import type {ReactNode} from "react";
 import type {Release} from "../lib/releases";
 import {LandingPreview} from "./landing-preview";
 import {UiIcon} from "./ui-icons";
-export function Landing({actions,releases}:{actions:ReactNode;releases:Release[]}){
+export function Landing({actions,releases,monthlyReviews}:{monthlyReviews?:ReactNode;actions:ReactNode;releases:Release[]}){
  return <div className="landing-current"><section className="landing-intro"><div><p className="eyebrow">FILMES · SÉRIES · ANIMES</p><h1>O que você vê.<br/><em>O que vocês vão ver.</em></h1><p className="landing-lead">Seu diário audiovisual e sua turma no mesmo lugar. Descubra histórias, registre suas opiniões e escolha a próxima sessão com os amigos.</p><div className="landing-actions">{actions}</div><p className="landing-access">Alpha por convite · Use um e-mail autorizado para criar sua conta.</p></div><LandingPreview releases={releases}/></section>
+ {monthlyReviews}
  <section className="landing-current-features" aria-labelledby="landing-features"><p className="eyebrow">SEU REPERTÓRIO, DO SEU JEITO</p><h2 id="landing-features">Mais do que lembrar o que você viu.</h2><div className="landing-feature-grid">
  <article><span className="landing-feature-icon" aria-hidden="true">☆</span><h3>Dê sua nota, conte sua história</h3><p>Marque “Já vi”, registre no <strong className="profile-section-name">Diário</strong> e escreva e salve sua resenha. Em séries e animes, avalie cada episódio.</p></article>
  <article><span className="landing-feature-icon"><UiIcon name="crown"/></span><h3>Seu ranking tem personalidade</h3><p>Organize mini cards em cinco categorias. Filmes, séries e animes têm rankings separados para suas escolhas fazerem sentido.</p></article>

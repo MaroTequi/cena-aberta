@@ -131,7 +131,7 @@ public class LetterboxdImport {
             if(watched)changes+=db.update("update library set watched=true,version=version+1 where actor=? and title=? and watched=false and interest=false",actor,row.title());
             if(row.kind().equals("watchlist"))changes+=db.update("update library set interest=true,version=version+1 where actor=? and title=? and watched=false and interest=false",actor,row.title());
             if(addRating)changes+=db.update("update library set rating=?,evaluation_public=?,version=version+1 where actor=? and title=?",row.rating(),publicEvaluation,actor,row.title());
-            if(addReview)changes+=db.update("update library set review=?,spoiler=true,evaluation_public=?,version=version+1 where actor=? and title=?",row.review(),publicEvaluation,actor,row.title());
+            if(addReview)changes+=db.update("update library set review_published_at=CURRENT_TIMESTAMP,review=?,spoiler=true,evaluation_public=?,version=version+1 where actor=? and title=?",row.review(),publicEvaluation,actor,row.title());
             if(row.kind().equals("diary")&&!row.date().isBlank()){
                 var date=LocalDate.parse(row.date());
                 if(db.queryForObject("select count(*) from viewing where actor=? and title=? and watched_on=?",Integer.class,actor,row.title(),date)<row.occurrence())

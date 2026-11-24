@@ -36,7 +36,7 @@ class LetterboxdImportTest {
  }
  @Test void fillsMissingValuesPreservesExistingAndReimportDoesNotDuplicate()throws Exception{
   var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
-  var migrations=new ResourceDatabasePopulator();for(String f:List.of("V1__social.sql","V6__viewing_time.sql","V8__public_evaluations.sql","V12__letterboxd_import.sql"))migrations.addScript(new ClassPathResource("db/migration/"+f));migrations.execute(source);
+  var migrations=new ResourceDatabasePopulator();for(String f:List.of("V1__social.sql","V6__viewing_time.sql","V8__public_evaluations.sql","V12__letterboxd_import.sql","V27__review_publication.sql"))migrations.addScript(new ClassPathResource("db/migration/"+f));migrations.execute(source);
   var db=new JdbcTemplate(source);db.update("insert into profile(actor,username,name) values('a','test','Test')");
   db.update("insert into library(actor,title,rating,review) values('a','tmdb-movie-777',8,'Existing')");
   var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);

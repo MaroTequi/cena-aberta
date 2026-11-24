@@ -57,8 +57,14 @@ const mock=createServer((req,res)=>{
   else if(url.pathname==="/3/discover/movie"&&url.searchParams.has("primary_release_date.lte"))res.end(JSON.stringify({results:[{...film,vote_count:500,vote_average:8},{...film,id:778,adult:true},{...film,id:779,release_date:"2099-01-01"}],total_pages:2}));
   else if(url.pathname==="/3/discover/movie")res.end(JSON.stringify({results:[],total_pages:1}));
   else if(url.pathname==="/3/discover/tv")res.end(JSON.stringify({results:[series],total_pages:1}));
-  else if((url.pathname==="/3/movie/777"||url.pathname==="/3/movie/800"))res.end(JSON.stringify({...film,id:Number(url.pathname.split("/").pop()),runtime:124,genres:[{name:"Drama"}],credits:{crew:[{job:"Director",name:"Diretora Exemplo"}],cast:[{name:"Artista Exemplo"}]}}));
-  else if(url.pathname==="/3/tv/777")res.end(JSON.stringify({...series,number_of_seasons:2,number_of_episodes:24,created_by:[{name:"Criadora Exemplo"}]}));
+  else if((url.pathname==="/3/movie/777"||url.pathname==="/3/movie/800"))res.end(JSON.stringify({...film,id:Number(url.pathname.split("/").pop()),belongs_to_collection:{id:555},runtime:124,genres:[{name:"Drama"}],credits:{crew:[{id:20,job:"Director",name:"Diretora Exemplo",profile_path:"/example.jpg"}],cast:[{id:21,name:"Artista Exemplo",character:"A protagonista"}]}}));
+  else if(url.pathname==="/3/collection/555")res.end(JSON.stringify({parts:[film,{...film,id:778,title:"Continuação",release_date:"2025-02-01"},{...film,id:779,adult:true}]}));
+  else if(url.pathname==="/3/tv/777/season/0")res.end(JSON.stringify({episodes:[{episode_number:1,name:"OVA: O reencontro",air_date:"2025-06-01"},{episode_number:2,name:"Especial de inverno",air_date:null}]}));
+  else if(url.pathname==="/3/person/20")res.end(JSON.stringify({name:"Diretora Exemplo",profile_path:"/example.jpg",biography:"Biografia de teste",combined_credits:{
+    cast:[{...series,media_type:"tv",character:"Narradora"}],
+    crew:["Director","Producer"].map(job=>({...film,media_type:"movie",job}))
+  }}));
+  else if(url.pathname==="/3/tv/777")res.end(JSON.stringify({...series,number_of_seasons:2,number_of_episodes:24,seasons:[{season_number:0,episode_count:2}],created_by:[{id:22,name:"Criadora Exemplo"}],aggregate_credits:{crew:[{id:22,name:"Criadora Exemplo",jobs:[{job:"Executive Producer"}]}]}}));
   else {res.statusCode=404;res.end("{}");}
 });
 function start(command, args, env, cwd) {
@@ -132,11 +138,26 @@ try {
   const film=await request(realMode,"/titles/tmdb-movie-777");
   assert.match(film.poster,/image\.tmdb\.org/);
   assert.equal(mockCalls.at(-1).searchParams.get("append_to_response"),"credits");
-  assert.deepEqual(film.details,{genres:["Drama"],runtime:124,seasons:null,episodes:null,directors:["Diretora Exemplo"],creators:[],cast:["Artista Exemplo"]});
+  assert.deepEqual(film.details,{genres:["Drama"],runtime:124,seasons:null,episodes:null,directors:["Diretora Exemplo"],creators:[],cast:["Artista Exemplo"],people:[
+    {id:21,name:"Artista Exemplo",photo:null,roles:["A protagonista"],castMember:true},
+    {id:20,name:"Diretora Exemplo",photo:"https://image.tmdb.org/t/p/w185/example.jpg",roles:["Director"],castMember:false}
+  ]});
   const seriesDetail=await request(realMode,"/titles/tmdb-tv-777");
   assert.equal(seriesDetail.details.episodes,24);
   assert.equal(seriesDetail.details.seasons,2);
   assert.deepEqual(seriesDetail.details.creators,["Criadora Exemplo"]);
+  assert.deepEqual(seriesDetail.details.people[0].roles,["Creator","Executive Producer"]);
+  const person=await request(realMode,"/people/20");
+  assert.deepEqual(person.works.map(work=>work.poster),[null,"https://image.tmdb.org/t/p/w185/example.jpg"]);
+  assert.equal(person.biography,"Biografia de teste");
+  assert.deepEqual(person.works.map(work=>[work.id,work.roles]),[["tmdb-tv-777",["Narradora"]],["tmdb-movie-777",["Director","Producer"]]]);
+  await request(realMode,"/people/20",{authorized:false,expected:401});
+  const chronology=await request(realMode,"/chronology/tmdb-movie-777");
+  assert.deepEqual(chronology.map(item=>item.work),["tmdb-movie-777","tmdb-movie-778"]);
+  const specials=await request(realMode,"/chronology/tmdb-tv-777");
+  assert.deepEqual(specials.map(item=>item.kind),["Série","OVA","Especial"]);
+  assert.equal(specials[2].date,"");
+  await request(realMode,"/chronology/tmdb-tv-777",{authorized:false,expected:401});
   const calls=mockCalls.length;
   assert.deepEqual(await request(realMode,"/titles/tmdb-movie-777"),film);
   assert.equal(mockCalls.length,calls);
@@ -427,6 +448,13 @@ try {
   assert.equal((await roomState.json()).status,"lobby");
   const roomPage=await fetch(web+"/salas?sala="+createdRoom.id,{headers:accountHeaders});
   assert.equal(roomPage.status,200);
+  const savedAvatar=(await (await fetch(web+"/api/v1/me?summary=true",{headers:accountHeaders})).json()).profile.avatar;
+  assert.match(savedAvatar,/^data:image\/jpeg;base64,/);
+  for(const page of [roomPage,await fetch(web+"/salas",{headers:accountHeaders})]){
+    const html=await page.text();
+    const link=html.match(/<a[^>]+class="room-nav-button room-profile-link"[^>]*>[\s\S]*?<\/a>/)?.[0];
+    assert.ok(link?.includes('src="'+savedAvatar+'"'),"Sélete deve mostrar o avatar da conta no cabeçalho.");
+  }
   const roomVisitor=await fetch(web+"/salas?sala="+createdRoom.id,{redirect:"manual"});
   assert.equal(roomVisitor.status,307);
   assert.equal(new URL(roomVisitor.headers.get("location"),web).searchParams.get("next"),"/salas?sala="+createdRoom.id);

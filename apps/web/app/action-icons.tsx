@@ -28,11 +28,11 @@ export function Icon({kind,active}:{kind:Kind;active:boolean}) {
   return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{shape}</svg>;
 }
 
-export function IconAction({kind,active,label,disabled,onClick}:{kind:Exclude<Kind,"spoiler">;active:boolean;label:string;disabled:boolean;onClick:()=>void}) {
+export function IconAction({kind,active,iconActive=active,label,disabled,onClick}:{kind:Kind;iconActive?:boolean;active:boolean;label:string;disabled:boolean;onClick:()=>void}) {
   const id=useId();
-  const caption=kind==="visibility"?null:label;
+  const caption=kind==="visibility"||kind==="spoiler"?null:label;
   return <span className="icon-control" data-kind={kind}>
-    <button type="button" className="icon-action" aria-label={label} aria-describedby={id} aria-pressed={active} disabled={disabled} onClick={onClick}><Icon kind={kind} active={active}/></button>
+    <button type="button" className="icon-action" aria-label={label} aria-describedby={id} aria-pressed={active} disabled={disabled} onClick={onClick}><Icon kind={kind} active={iconActive}/></button>
     {caption&&<span className="touch-icon-caption" aria-hidden="true">{caption}</span>}
     <span className="icon-tooltip" role="tooltip" id={id}>{label}</span>
   </span>;
