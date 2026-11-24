@@ -8,6 +8,7 @@ import {
 } from "../../../lib/browser-preferences";
 import { RatingPreference } from "../../star-rating";
 import { signOut } from "next-auth/react";
+import { ExportData } from "./export-data";
 export function AccountSettings({ supported }: { supported: boolean }) {
   const [state, setState] = useState(""),
     [action, setAction] = useState(""),
@@ -90,6 +91,7 @@ export function AccountSettings({ supported }: { supported: boolean }) {
           <h2>Avaliações</h2>
           <RatingPreference />
         </section>
+        <ExportData />
         {!supported ? (
           <p>Gerencie esta conta pelo seu provedor de acesso.</p>
         ) : !state && !error ? (
