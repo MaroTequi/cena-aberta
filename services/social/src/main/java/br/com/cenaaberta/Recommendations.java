@@ -34,17 +34,21 @@ public class Recommendations {
     @PostMapping("/recommendations")
     @Transactional
     Map<String,Object> recommend(@RequestHeader("X-Actor") String actor,@RequestBody RecommendationInput input) {
-        actors.lockActive(actor);
+        // A chamada HTTP ao catálogo roda antes do lock da linha do usuário, para não segurá-lo durante a rede.
+        actors.requireActive(actor);
         validateTitle(input.title());
         String message=optional(input.message(),300);
         var friend=Friendships.requireFriend(db,actor,input.recipient());
         String recipient=(String)friend.get("actor");
+        var sentBefore=db.queryForList("select id from recommendation where sender=? and recipient=? and title=?",String.class,actor,recipient,input.title());
+        if(!sentBefore.isEmpty()) return sent(sentBefore.getFirst(),friend,true);
+        var title=catalog.titles(List.of(input.title()),false).get(input.title());
+        actors.lockActive(actor);
         var existing=db.queryForList("select id from recommendation where sender=? and recipient=? and title=?",String.class,actor,recipient,input.title());
         if(!existing.isEmpty()) return sent(existing.getFirst(),friend,true);
         if(db.queryForObject("select count(*) from recommendation where sender=? and created>?",Integer.class,actor,OffsetDateTime.now(ZoneOffset.UTC).minusHours(24))>=DAILY_LIMIT)
             fail(HttpStatus.TOO_MANY_REQUESTS,"Limite de "+DAILY_LIMIT+" recomendações por dia.");
         // O nome fica guardado para a notificação não depender do catálogo a cada consulta do sino.
-        var title=catalog.titles(List.of(input.title()),false).get(input.title());
         if(title==null) fail(HttpStatus.NOT_FOUND,"Obra não encontrada.");
         String name=title.path("name").asText(input.title());
         String id=UUID.randomUUID().toString();

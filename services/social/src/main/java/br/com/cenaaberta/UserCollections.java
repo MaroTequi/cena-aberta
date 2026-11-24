@@ -118,18 +118,22 @@ public class UserCollections {
     @PutMapping("/me/collections/{id}/items")
     @Transactional
     Map<String,Object> replaceItems(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody CollectionItems input) {
-        actors.lockActive(actor);
+        // A chamada HTTP ao catálogo roda antes do lock da coleção, para não segurá-lo durante a rede.
+        actors.requireActive(actor);
         if(input.titles()==null || input.titles().size()>MAX_ITEMS) fail(HttpStatus.BAD_REQUEST,"Use até "+MAX_ITEMS+" obras.");
         var unique=new LinkedHashSet<String>();
         for(String title:input.titles()) {
             validateTitle(title);
             if(!unique.add(title)) fail(HttpStatus.BAD_REQUEST,"Obra repetida na coleção.");
         }
-        checkVersion(actor,id,input.version());
-        // Só as obras novas vão ao catálogo; as que já estavam na coleção já foram conferidas.
-        var previous=new HashSet<>(db.queryForList("select title from collection_item where collection_id=?",String.class,id));
+        // Só as obras novas vão ao catálogo; as que já estavam na coleção já foram conferidas. Se a coleção mudar entre esta
+        // leitura e o lock, a versão não bate e checkVersion responde 409.
+        var previous=new HashSet<>(db.queryForList("select i.title from collection_item i join collection c on c.id=i.collection_id where i.collection_id=? and c.actor=?",String.class,id,actor));
         var added=unique.stream().filter(title -> !previous.contains(title)).toList();
-        if(!added.isEmpty() && !catalog.titles(added,false).keySet().containsAll(added)) fail(HttpStatus.NOT_FOUND,"Obra não encontrada.");
+        boolean missing=!added.isEmpty() && !catalog.titles(added,false).keySet().containsAll(added);
+        actors.lockActive(actor);
+        checkVersion(actor,id,input.version());
+        if(missing) fail(HttpStatus.NOT_FOUND,"Obra não encontrada.");
         db.update("delete from collection_item where collection_id=?",id);
         int position=0;
         for(String title:unique) db.update("insert into collection_item(collection_id,title,position) values(?,?,?)",id,title,position++);
