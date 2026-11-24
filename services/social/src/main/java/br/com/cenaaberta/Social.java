@@ -280,21 +280,25 @@ public class Social {
     Map<String,Object> notifications(@RequestHeader("X-Actor") String actor) {
         actors.requireActive(actor);
         var items=db.queryForList("""
-                select kind,target,label,sender,count(*) over() as total from (
-                    select 'friend' as kind,p.username as target,p.name as label,p.name as sender,f.created
+                select kind,target,label,sender,id,count(*) over() as total from (
+                    select 'friend' as kind,p.username as target,p.name as label,p.name as sender,cast(null as varchar(36)) as id,f.created
                     from friendship f join profile p on p.actor=f.requester
                     where f.recipient=? and f.status='pending' and p.active=true
                     union all
-                    select 'room',r.id,r.name,p.name,i.created
+                    select 'room',r.id,r.name,p.name,cast(null as varchar(36)),i.created
                     from movie_room_invitation i join movie_room r on r.id=i.room
                     join profile p on p.actor=i.sender
                     where i.recipient=? and p.active=true and r.status='lobby' and r.expires>CURRENT_TIMESTAMP
                     and not exists(select 1 from movie_room_member m where m.room=r.id and m.actor=i.recipient)
                     union all
-                    select reason,room,name,'',visible_at from room_end_notice
+                    select reason,room,name,'',cast(null as varchar(36)),visible_at from room_end_notice
                     where recipient=? and seen=false and visible_at<=CURRENT_TIMESTAMP
-                ) notices order by created desc,kind,target limit 20
-                """,actor,actor,actor);
+                    union all
+                    select 'recommendation',rc.title,rc.title_name,p.name,rc.id,rc.created
+                    from recommendation rc join profile p on p.actor=rc.sender
+                    where rc.recipient=? and rc.seen=false and p.active=true
+                ) notices order by created desc,kind,target,id limit 20
+                """,actor,actor,actor,actor);
         long total=items.isEmpty()?0:((Number)items.getFirst().get("total")).longValue();
         items.forEach(row->row.remove("total"));
         return Map.of("items",items,"total",total);
