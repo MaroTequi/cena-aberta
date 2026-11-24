@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./style.css";
+import "./user-features.css";
 import { ThemeSync } from "./theme-picker";
 import { FeedbackWidget } from "./feedback-widget";
 import { version } from "../package.json";
