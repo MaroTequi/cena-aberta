@@ -1,5 +1,11 @@
 # Alpha com Tailscale Funnel
 
+## Homologação e publicação
+
+No host Docker, use `python deploy/release.py hml <commit>` com um commit revisado disponível no Git local. Abra http://localhost:3001 e a caixa de testes em http://localhost:8025. O primeiro deploy gera segredos em `deploy/.env.hml`. O catálogo usa dados ilustrativos até configurar um token TMDB próprio. Cada instalação tem bancos independentes.
+
+Para incluir uma mudança do Luiz, reconcilie o PR com a versão de referência e implante o commit resultante na homologação. Um push sozinho executa a CI. Depois do merge, homologue a ponta exata da main. Para publicar, execute explicitamente `python deploy/release.py promover <SHA>` no mesmo host. A promoção verifica as imagens, faz backup do original e usa as imagens testadas. O comando antigo `alpha.py up` serve para a instalação inicial.
+
 ## Estado e requisitos
 
 O Compose mantém dois PostgreSQL persistentes e publica somente o frontend em `127.0.0.1:3000`. Os serviços reiniciam com o Docker e os logs têm rotação. O comando `up` espera pela saúde do frontend e dos dois serviços. O cadastro por convite e o SMTP são obrigatórios neste ambiente.
@@ -66,7 +72,7 @@ Para recuperar após perda da VM, crie um ambiente separado com o commit do mani
 
 ## Atualização
 
-Faça backup e copie-o para fora antes de atualizar. Use `git pull --ff-only` e `python3 deploy/alpha.py up`. Confira saúde, migrações e fluxos. Para rollback com migração incompatível, recupere o par de bancos e o commit correspondente em ambiente separado; apenas trocar a imagem não reverte o banco. Nunca use `docker compose down -v` no ambiente real.
+Faça backup e copie-o para fora antes de atualizar. Siga o fluxo de homologação e promoção acima. Confira saúde, migrações e fluxos. Para rollback com migração incompatível, recupere o par de bancos e o commit correspondente em ambiente separado; apenas trocar a imagem não reverte o banco. Nunca use `docker compose down -v` no ambiente real.
 
 O GitHub Actions executa builds e testes da aplicação e um job ARM que compila o Compose, verifica saúde, faz backup e restaura em isolamento com dados descartáveis. SMTP real, TMDB real, acesso externo e disponibilidade da Oracle precisam ser validados no servidor.
 

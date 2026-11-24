@@ -1,0 +1,55 @@
+name: cena-aberta-hml
+x-runtime: &runtime
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: {max-size: "5m", max-file: "2"}
+
+services:
+  catalog-db:
+    <<: *runtime
+  social-db:
+    <<: *runtime
+  catalog:
+    <<: *runtime
+  web:
+    <<: *runtime
+    healthcheck:
+      test: ["CMD", "node", "-e", "Promise.all(['http://127.0.0.1:3000/conta','http://catalog:8181/health','http://social:8182/health'].map(u=>fetch(u).then(r=>{if(!r.ok)throw Error('unhealthy')}))).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 8s
+      retries: 15
+    ports: !override
+      - "127.0.0.1:3001:3000"
+  social:
+    <<: *runtime
+    environment:
+      SMTP_AUTH: "false"
+      SMTP_STARTTLS: "false"
+  backup:
+    <<: *runtime
+    build:
+      context: ./deploy
+      dockerfile: backup.Dockerfile
+    volumes:
+      - admin-backups:/archive
+    environment:
+      INTERNAL_SECRET: ${SOCIAL_INTERNAL_SECRET:?}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?}
+      SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: homologacao@example.test
+      ALPHA_URL: ${FRONTEND_URL}
+      SMTP_AUTH: "false"
+      SMTP_STARTTLS: "false"
+  mailpit:
+    image: axllent/mailpit@sha256:6abc8e633df15eaf785cfcf38bae48e66f64beecdc03121e249d0f9ec15f0707
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    environment:
+      MP_MAX_MESSAGES: "100"
+
+volumes:
+  admin-backups:

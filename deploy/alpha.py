@@ -163,9 +163,13 @@ def main():
     elif args.command == "backup":
         backup()
     else:
-        configuration()
+        config = configuration()
         print("ConfiguraÃ§Ã£o alpha validada; segredos nÃ£o exibidos.")
         if args.command == "up":
+            disposable = config["services"]["web"]["environment"]["NEXTAUTH_URL"] == "https://alpha.example.test"
+            existing = run(COMPOSE + ["ps", "--all", "--quiet"], capture_output=True, text=True)
+            if existing.stdout.strip() and not disposable:
+                raise ValueError("Para atualizar o original, use deploy/release.py promover com o commit homologado.")
             run(COMPOSE + ["up", "-d", "--build", "--wait", "--wait-timeout", "240"])
             run(COMPOSE + ["ps"])
             print("Valide a URL HTTPS e os fluxos antes de compartilhar.")

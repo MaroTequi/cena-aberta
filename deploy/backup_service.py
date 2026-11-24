@@ -97,8 +97,10 @@ def create(actor, owner):
                 msg.set_content("Entre com sua conta de administrador e baixe o backup em até 24 horas.\n\n" +
                                 os.environ["ALPHA_URL"].rstrip("/") + "/api/v1/backups/" + token)
                 with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.getenv("SMTP_PORT", "587")), timeout=30) as mail:
-                    mail.starttls(context=ssl.create_default_context())
-                    mail.login(os.environ["SMTP_USERNAME"], os.environ["SMTP_PASSWORD"])
+                    if os.getenv("SMTP_STARTTLS", "true").lower() == "true":
+                        mail.starttls(context=ssl.create_default_context())
+                    if os.getenv("SMTP_AUTH", "true").lower() == "true":
+                        mail.login(os.environ["SMTP_USERNAME"], os.environ["SMTP_PASSWORD"])
                     mail.send_message(msg)
             except Exception:
                 target.unlink(missing_ok=True)
