@@ -40,6 +40,14 @@ export function LibraryPage<T extends { title: string }>({
   const [result, setResult] = useState<Result<T> | null>(null);
   const [error, setError] = useState("");
   const strip = useRef<HTMLDivElement>(null);
+  // Se a opção escolhida deixa de existir (ex.: diário passou a ser privado), volta ao padrão em vez de
+  // manter um valor que o seletor não mostra mais.
+  useEffect(() => {
+    if (!sortOptions(section, diaryVisible).some((option) => option.value === sort)) {
+      setSort("title");
+      setPage(1);
+    }
+  }, [section, diaryVisible, sort]);
   const params = libraryParams({ section, page, username, sort, filter, diaryVisible });
   const key = params.toString();
   useEffect(() => {
