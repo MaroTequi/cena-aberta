@@ -49,6 +49,8 @@ public class Social {
 
     private final LibraryEntries entries;
 
+    private final CatalogTitles catalog;
+
 
 
 
@@ -60,9 +62,9 @@ public class Social {
 
     Social(JdbcTemplate db,
 
-           ActiveActors actors,LibraryEntries entries) {
+           ActiveActors actors,LibraryEntries entries,CatalogTitles catalog) {
 
-        this.db=db; this.actors=actors; this.entries=entries;
+        this.db=db; this.actors=actors; this.entries=entries; this.catalog=catalog;
 
     }
 
@@ -230,15 +232,15 @@ public class Social {
     @PutMapping("/me/visibility") @Transactional
     Map<String,Object> visibility(@RequestHeader("X-Actor") String actor,@RequestBody ProfileVisibility input){
         actors.lockActive(actor);
-        if(input.visible()==null||input.section()==null||!Set.of("all","watchlist","ranking","watched","diary").contains(input.section()))fail(HttpStatus.BAD_REQUEST,"Seção inválida.");
-        if(input.section().equals("all"))db.update("update profile set show_watchlist=?,show_ranking=?,show_watched=?,show_diary=? where actor=?",input.visible(),input.visible(),input.visible(),input.visible(),actor);
+        if(input.visible()==null||input.section()==null||!Set.of("all","watchlist","ranking","watched","diary","lists").contains(input.section()))fail(HttpStatus.BAD_REQUEST,"Seção inválida.");
+        if(input.section().equals("all"))db.update("update profile set show_watchlist=?,show_ranking=?,show_watched=?,show_diary=?,show_lists=? where actor=?",input.visible(),input.visible(),input.visible(),input.visible(),input.visible(),actor);
         else db.update("update profile set show_"+input.section()+"=? where actor=?",input.visible(),actor);
         return profileVisibility(actor);
     }
     private Map<String,Object> profileVisibility(String actor){
-        var row=Rows.one(db,"select show_watchlist,show_ranking,show_watched,show_diary from profile where actor=?",actor);
+        var row=Rows.one(db,"select show_watchlist,show_ranking,show_watched,show_diary,show_lists from profile where actor=?",actor);
         var result=new LinkedHashMap<String,Object>();
-        for(String section:List.of("watchlist","ranking","watched","diary"))result.put(section,row.get("show_"+section));
+        for(String section:List.of("watchlist","ranking","watched","diary","lists"))result.put(section,row.get("show_"+section));
         return result;
     }
     private static final int DIARY_PAGE_SIZE = 24;
@@ -302,12 +304,30 @@ public class Social {
         return Map.of("read",true);
     }
 
+    static final Set<String> LIBRARY_SORTS=Set.of("title","recent","rating","name","year");
+    static final Set<String> CATALOG_FILTERS=Set.of("movie","tv","anime");
+    /** Teto de linhas lidas quando o filtro/ordem depende do catálogo (mesmo teto de 1000 do painel, com folga). */
+    static final int CATALOG_SCAN=2000;
+
+    /**
+     * Página da biblioteca (assistidos ou Vou ver), própria ou de outra pessoa.
+     * @param actor usuário da sessão
+     * @param section watched | watchlist
+     * @param page página (1..), 24 itens
+     * @param username dono da biblioteca; ausente = o próprio usuário
+     * @param sort title (padrão, ordem antiga por id) | recent | rating | name | year
+     * @param filter all (padrão) | unrated | rated | min:N (1..10) | movie | tv | anime
+     * @return {items,pages}
+     */
     @GetMapping("/library-page")
     Map<String,Object> libraryPage(@RequestHeader("X-Actor") String actor, @RequestParam String section,
-                                   @RequestParam int page, @RequestParam(required=false) String username) {
+                                   @RequestParam int page, @RequestParam(required=false) String username,
+                                   @RequestParam(defaultValue="title") String sort, @RequestParam(defaultValue="all") String filter) {
         actors.requireActive(actor);
         if (page < 1 || !Set.of("watched","watchlist").contains(section))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if (!LIBRARY_SORTS.contains(sort) || !(Set.of("all","unrated","rated").contains(filter) || CATALOG_FILTERS.contains(filter) || filter.matches("min:(10|[1-9])")))
+            fail(HttpStatus.BAD_REQUEST,"Filtro ou ordenação inválidos.");
         String owner = actor;
         boolean visitor = username != null;
         if (visitor) {
@@ -325,13 +345,63 @@ public class Social {
                     + "case when evaluation_public and not hidden then "+EFFECTIVE_SPOILER+" else false end as spoiler,version,"
                     + MY_SPOILER_VOTE+" as my_vote,exists(select 1 from library viewer where viewer.actor=? and viewer.title=l.title and viewer.watched) as viewer_watched"
                 : "title,rewatching,rating,review,spoiler";
+        // Visitante só filtra/ordena pela nota que consegue ver; senão a ordem vazaria notas privadas.
+        String rating = visitor ? "case when l.evaluation_public and not l.hidden then l.rating end" : "l.rating";
+        if (filter.equals("unrated")) predicate += " and " + rating + " is null";
+        else if (filter.equals("rated")) predicate += " and " + rating + " is not null";
+        else if (filter.startsWith("min:")) predicate += " and " + rating + " >= " + Integer.parseInt(filter.substring(4));
+        // "recent" usa a última sessão do diário; para visitante só quando o diário é público (a ordem revelaria datas).
+        // O Vou ver não tem data própria, então lá "recent" cai na ordem padrão.
+        boolean recent = sort.equals("recent") && !watchlist && (!visitor || Boolean.TRUE.equals(profileVisibility(owner).get("diary")));
+        String order = sort.equals("rating") ? rating + " desc nulls last,l.title"
+                : recent ? "(select max(coalesce(v.watched_at,v.created)) from viewing v where v.actor=l.actor and v.title=l.title) desc nulls last,l.title"
+                : "l.title";
         int size = 24;
-        Object[] args = visitor && !watchlist ? new Object[]{actor,actor,owner,size,(page-1L)*size} : new Object[]{owner,size,(page-1L)*size};
+        boolean catalogMode = sort.equals("name") || sort.equals("year") || CATALOG_FILTERS.contains(filter);
+        var args = new ArrayList<Object>();
+        if (visitor && !watchlist) { args.add(actor); args.add(actor); }
+        args.add(owner);
+        if (catalogMode) args.add(CATALOG_SCAN);
+        else { args.add(size); args.add((page-1L)*size); }
         var rows = db.queryForList("select " + fields + ",count(*) over() as total from library l where actor=? and "
-                + predicate + " order by title limit ? offset ?",args);
+                + predicate + " order by " + order + " limit ?" + (catalogMode ? "" : " offset ?"),args.toArray());
         long total = rows.isEmpty() ? 0 : ((Number)rows.getFirst().get("total")).longValue();
         rows.forEach(row -> row.remove("total"));
+        if (catalogMode) {
+            rows = catalogPage(rows,sort,filter);
+            total = rows.size();
+            rows = rows.subList((int)Math.min(rows.size(),(page-1L)*size),(int)Math.min(rows.size(),(long)page*size));
+        }
         return Map.of("items",rows,"pages",(total + size - 1)/size);
+    }
+
+    /** Filtra por formato e/ou ordena por nome/ano com metadados do catálogo; a ordem SQL anterior desempata (sort estável). */
+    private List<Map<String,Object>> catalogPage(List<Map<String,Object>> rows,String sort,String filter) {
+        var meta = rows.isEmpty() ? Map.<String,com.fasterxml.jackson.databind.JsonNode>of()
+                : catalog.titles(rows.stream().map(row -> (String)row.get("title")).toList(),false);
+        var result = new ArrayList<Map<String,Object>>();
+        for (var row : rows) {
+            var title = meta.get((String)row.get("title"));
+            if (CATALOG_FILTERS.contains(filter)) {
+                if (title == null) continue;
+                String format = title.path("anime").asBoolean() ? "anime" : title.path("format").asText();
+                if (!format.equals(filter)) continue;
+            }
+            result.add(row);
+        }
+        if (sort.equals("name")) {
+            var collator = java.text.Collator.getInstance(Locale.forLanguageTag("pt-BR"));
+            result.sort(Comparator.comparing((Map<String,Object> row) -> {
+                var title = meta.get((String)row.get("title"));
+                return title == null ? null : title.path("name").asText();
+            }, Comparator.nullsLast(collator::compare)));
+        } else if (sort.equals("year")) {
+            result.sort(Comparator.comparing((Map<String,Object> row) -> {
+                var title = meta.get((String)row.get("title"));
+                return title == null || !title.path("year").asText().matches("\\d{4}") ? null : Integer.valueOf(title.path("year").asText());
+            }, Comparator.nullsLast(Comparator.<Integer>reverseOrder())));
+        }
+        return result;
     }
 
     private Map<String,Object> dashboard(Map<String,Object> profile,String actor,boolean own,boolean summary,String title) {
