@@ -21,6 +21,46 @@ test("bloqueia o que não está na lista", () => {
   assert.equal(resolveRoute("GET", "backups/curto"), null);
 });
 
+test("libera as rotas do usuário comum (coleções, estatísticas, feed, resenhas, recomendações)", () => {
+  const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+  const allowed: Array<[string, string]> = [
+    ["GET", "me/collections"],
+    ["POST", "me/collections"],
+    ["GET", "me/collections/" + id],
+    ["PUT", "me/collections/" + id],
+    ["PUT", "me/collections/" + id + "/items"],
+    ["DELETE", "me/collections/" + id],
+    ["GET", "collections"],
+    ["GET", "collections/" + id],
+    ["GET", "me/stats"],
+    ["GET", "me/goal"],
+    ["PUT", "me/goal"],
+    ["GET", "me/export"],
+    ["GET", "feed"],
+    ["GET", "friends/compatibility"],
+    ["GET", "titles/tmdb-movie-603/friends"],
+    ["PUT", "titles/tmdb-movie-603/review-like"],
+    ["GET", "titles/tmdb-movie-603/review-comments"],
+    ["POST", "titles/tmdb-movie-603/review-comments"],
+    ["DELETE", "titles/tmdb-movie-603/review-comments/" + id],
+    ["GET", "recommendations"],
+    ["POST", "recommendations"],
+    ["PUT", "recommendations/" + id + "/read"],
+  ];
+  for (const [method, path] of allowed) assert.equal(resolveRoute(method, path), "social", method + " " + path);
+});
+
+test("rotas novas recusam método errado e ids malformados", () => {
+  assert.equal(resolveRoute("DELETE", "me/collections"), null);
+  assert.equal(resolveRoute("GET", "me/collections/../export"), null);
+  assert.equal(resolveRoute("PUT", "me/collections/nao-e-uuid"), null);
+  assert.equal(resolveRoute("POST", "me/goal"), null);
+  assert.equal(resolveRoute("PUT", "me/export"), null);
+  assert.equal(resolveRoute("DELETE", "titles/tmdb-movie-603/review-comments"), null);
+  assert.equal(resolveRoute("PUT", "recommendations/abc/read"), null);
+  assert.equal(resolveRoute("DELETE", "recommendations"), null);
+});
+
 test("toda regra usa um método HTTP que o proxy exporta", () => {
   for (const [method] of routes) assert.ok(["GET", "PUT", "POST", "DELETE"].includes(method), method);
 });

@@ -28,6 +28,8 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
   }
   const catalog = route === "catalog";
   const backup = route === "backup";
+  // Downloads (backup e exportação do usuário) precisam do nome do arquivo e de mais tempo para gerar o ZIP.
+  const download = backup || (request.method === "GET" && path === "me/export");
   const base = backup
     ? "http://backup:8183"
     : catalog
@@ -79,13 +81,15 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
                 ? 65000
                 : path === "title-batch"
                   ? 25000
-                  : 6500,
+                  : download
+                    ? 30000
+                    : 6500,
             ),
     });
     return new Response(result.body, {
       status: result.status,
       headers: {
-        ...(backup && result.headers.has("content-disposition")
+        ...(download && result.headers.has("content-disposition")
           ? { "Content-Disposition": result.headers.get("content-disposition")! }
           : {}),
         "Content-Type": result.headers.get("content-type") ?? "application/json",
