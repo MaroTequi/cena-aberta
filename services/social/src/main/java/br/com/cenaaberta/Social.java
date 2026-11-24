@@ -158,7 +158,7 @@ public class Social {
         return publicReviews(actor,id,entries.episodic(id));
     }
 
-    private static final String EFFECTIVE_SPOILER = """
+    static final String EFFECTIVE_SPOILER = """
         (l.spoiler or (select coalesce(sum(case when v.contains_spoiler then 1 else -1 end),0)
         from review_spoiler_vote v where v.author=l.actor and v.title=l.title) >= 2)
         """;
