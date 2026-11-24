@@ -168,9 +168,12 @@ public class Social {
 
     private List<Map<String,Object>> publicReviews(String actor,String id,boolean series) {
         return db.queryForList("select p.username,p.name,p.avatar,case when ? then null else l.rating end as rating,"
-            + "l.review,l.version,"+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote "
+            + "l.review,l.version,"+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote,"
+            + "(select count(*) from review_like k where k.author=l.actor and k.title=l.title) as likes,"
+            + "exists(select 1 from review_like k where k.author=l.actor and k.title=l.title and k.liker=?) as liked,"
+            + "(select count(*) from review_comment c join profile cp on cp.actor=c.commenter where c.author=l.actor and c.title=l.title and cp.active=true) as comments "
             + "from library l join profile p on p.actor=l.actor where l.title=? and l.review is not null "
-            + "and l.evaluation_public=true and l.hidden=false and p.active=true order by p.username limit 50",series,actor,id);
+            + "and l.evaluation_public=true and l.hidden=false and p.active=true order by p.username limit 50",series,actor,actor,id);
     }
 
     record SpoilerVote(String username, Integer version, Boolean containsSpoiler) {}
