@@ -18,7 +18,7 @@ A massa é **idempotente**: dá para aplicar quantas vezes quiser. Ela apaga só
 
 ### 1. Garanta que a V27 já rodou
 
-A V27 é a migração (script que altera o schema do banco) que cria as tabelas novas: metas, curtidas, comentários e recomendações. Ela roda sozinha quando o serviço social sobe. Então, **se o banco ainda é antigo, suba o app uma vez** (`npm run local`), espere subir e pare (Ctrl+C). Se esquecer, o `seed.sql` falha dizendo que a tabela `annual_goal` (ou outra) não existe.
+A V27 é a migração (script que altera o schema do banco) que cria as tabelas novas: metas, curtidas, comentários e recomendações. Ela roda sozinha quando o serviço social sobe. Então, **se o banco ainda é antigo, suba o app uma vez** (`node scripts/local.mjs`, da raiz), espere subir e pare (Ctrl+C). Se esquecer, o `seed.sql` falha dizendo que a tabela `annual_goal` (ou outra) não existe.
 
 ### 2. H2 local (o caminho normal)
 
@@ -35,7 +35,7 @@ O que o script faz:
 - Copia o banco para `data/social.mv.db.antes-da-massa` (a pasta `data/` é ignorada pelo Git).
 - Roda o `seed.sql` com `org.h2.tools.RunScript` usando o H2 **2.2.224** de `~/.m2` (pode trocar o jar com a variável `H2_JAR`).
 
-Depois é só subir o app (`npm run local`) e logar.
+Depois é só subir o app (`node scripts/local.mjs`) e logar.
 
 ### 3. PostgreSQL do Docker Compose
 
