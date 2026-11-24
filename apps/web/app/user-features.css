@@ -2,19 +2,14 @@
    Usa só os tokens de style.css (--panel, --surface, --line, --text, --muted, --accent…), então segue os temas
    claro e escuro sem regras próprias, exceto onde o app já usa cores fixas. */
 
-/* Navegação da área pessoal */
-.user-pages-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: -16px 0 24px;
-}
-.user-pages-nav .room-nav-button {
-  padding-inline: 12px 14px;
-}
-.user-pages-nav .room-nav-button[aria-current="page"] {
-  border-color: var(--accent);
+/* Navegação principal: página pessoal aberta e links do menu do catálogo */
+.nav .room-nav-link[aria-current="page"] {
   color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.nav .catalog-drawer-link[aria-current="page"] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .nav .catalog-drawer-link {
   display: flex;
@@ -586,14 +581,6 @@ a.review-author-link {
 }
 
 @media (max-width: 600px) {
-  .user-pages-nav {
-    margin-top: -8px;
-  }
-  .user-pages-nav .room-nav-button {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-inline: 8px;
-  }
   .stats-months {
     gap: 3px;
     height: 160px;

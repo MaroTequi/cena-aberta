@@ -151,186 +151,194 @@ export function CollectionPage({ id }: { id: string }) {
   }
   const own = !!loaded?.own;
   return (
-    <main className="wrap friends-page collection-page">
+    <>
       <UserPageHeader current={own ? "/colecoes" : ""} />
-      {own && (
-        <p>
-          <Link href="/colecoes">← Minhas coleções</Link>
-        </p>
-      )}
-      {!loaded && !error && <p role="status">Carregando coleção…</p>}
-      {error && (
-        <p role="alert" className="message error">
-          {error}{" "}
-          {!loaded && (
-            <button
-              onClick={() => {
-                setError("");
-                retry((n) => n + 1);
-              }}
-            >
-              Tentar novamente
-            </button>
-          )}
-        </p>
-      )}
-      {notice && (
-        <p role="status" className="message">
-          {notice}
-        </p>
-      )}
-      {detail && (
-        <>
-          <div className="room-intro">
-            <span className="room-eyebrow">COLEÇÃO · {titles.length === 1 ? "1 OBRA" : titles.length + " OBRAS"}</span>
-            <h1>{detail.name}</h1>
-            {detail.description && <p className="review-text">{detail.description}</p>}
-            {!own && detail.owner && (
-              <Link className="friend-person" href={"/?usuario=" + encodeURIComponent(detail.owner.username)}>
-                <ProfileAvatar name={detail.owner.name} avatar={detail.owner.avatar} />
-                <span>
-                  <strong>{detail.owner.name}</strong>
-                  <small>@{detail.owner.username}</small>
-                </span>
-              </Link>
-            )}
-          </div>
-          {own && (
-            <details className="panel">
-              <summary>Editar nome e descrição</summary>
-              <form className="form" key={detail.version} onSubmit={saveInfo}>
-                <label>
-                  Nome
-                  <input name="name" required maxLength={100} defaultValue={detail.name} />
-                </label>
-                <label>
-                  Descrição (opcional)
-                  <textarea name="description" maxLength={500} defaultValue={detail.description} />
-                </label>
-                <div className="row">
-                  <button className="primary" disabled={busy}>
-                    Salvar
-                  </button>
-                  <button
-                    type="button"
-                    className="collection-danger"
-                    disabled={busy}
-                    onClick={() => void removeCollection()}
-                  >
-                    Excluir coleção
-                  </button>
-                </div>
-              </form>
-            </details>
-          )}
-          {own && (
-            <section className="panel collection-add" aria-labelledby="collection-add-heading">
-              <h2 id="collection-add-heading">Adicionar obras</h2>
-              <CatalogSearch
-                category="all"
-                query={query}
-                onChange={(value) => {
-                  setQuery(value);
-                  if (!value) setResults(null);
+      <main className="wrap friends-page collection-page">
+        {own && (
+          <p>
+            <Link href="/colecoes">← Minhas coleções</Link>
+          </p>
+        )}
+        {!loaded && !error && <p role="status">Carregando coleção…</p>}
+        {error && (
+          <p role="alert" className="message error">
+            {error}{" "}
+            {!loaded && (
+              <button
+                onClick={() => {
+                  setError("");
+                  retry((n) => n + 1);
                 }}
-                onSearch={() => void search()}
-                onOpen={add}
-              />
-              {results && (
-                <div className="collection-results">
-                  {!results.length && <p className="muted">Nenhuma obra encontrada.</p>}
-                  {results.map((title) => (
-                    <div className="collection-row" key={title.id}>
-                      <div className="collection-thumb">
-                        <Poster title={title} />
+              >
+                Tentar novamente
+              </button>
+            )}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="message">
+            {notice}
+          </p>
+        )}
+        {detail && (
+          <>
+            <div className="room-intro">
+              <span className="room-eyebrow">
+                COLEÇÃO · {titles.length === 1 ? "1 OBRA" : titles.length + " OBRAS"}
+              </span>
+              <h1>{detail.name}</h1>
+              {detail.description && <p className="review-text">{detail.description}</p>}
+              {!own && detail.owner && (
+                <Link className="friend-person" href={"/?usuario=" + encodeURIComponent(detail.owner.username)}>
+                  <ProfileAvatar name={detail.owner.name} avatar={detail.owner.avatar} />
+                  <span>
+                    <strong>{detail.owner.name}</strong>
+                    <small>@{detail.owner.username}</small>
+                  </span>
+                </Link>
+              )}
+            </div>
+            {own && (
+              <details className="panel">
+                <summary>Editar nome e descrição</summary>
+                <form className="form" key={detail.version} onSubmit={saveInfo}>
+                  <label>
+                    Nome
+                    <input name="name" required maxLength={100} defaultValue={detail.name} />
+                  </label>
+                  <label>
+                    Descrição (opcional)
+                    <textarea name="description" maxLength={500} defaultValue={detail.description} />
+                  </label>
+                  <div className="row">
+                    <button className="primary" disabled={busy}>
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className="collection-danger"
+                      disabled={busy}
+                      onClick={() => void removeCollection()}
+                    >
+                      Excluir coleção
+                    </button>
+                  </div>
+                </form>
+              </details>
+            )}
+            {own && (
+              <section className="panel collection-add" aria-labelledby="collection-add-heading">
+                <h2 id="collection-add-heading">Adicionar obras</h2>
+                <CatalogSearch
+                  category="all"
+                  query={query}
+                  onChange={(value) => {
+                    setQuery(value);
+                    if (!value) setResults(null);
+                  }}
+                  onSearch={() => void search()}
+                  onOpen={add}
+                />
+                {results && (
+                  <div className="collection-results">
+                    {!results.length && <p className="muted">Nenhuma obra encontrada.</p>}
+                    {results.map((title) => (
+                      <div className="collection-row" key={title.id}>
+                        <div className="collection-thumb">
+                          <Poster title={title} />
+                        </div>
+                        <span className="collection-row-name">
+                          <strong>{title.name}</strong>
+                          <small>
+                            {[title.year, title.anime ? "Anime" : title.format === "movie" ? "Filme" : "Série"]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={busy || titles.includes(title.id)}
+                          onClick={() => add(title.id)}
+                        >
+                          {titles.includes(title.id) ? "Na coleção" : "Adicionar"}
+                        </button>
                       </div>
-                      <span className="collection-row-name">
-                        <strong>{title.name}</strong>
-                        <small>
-                          {[title.year, title.anime ? "Anime" : title.format === "movie" ? "Filme" : "Série"]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </small>
-                      </span>
-                      <button type="button" disabled={busy || titles.includes(title.id)} onClick={() => add(title.id)}>
-                        {titles.includes(title.id) ? "Na coleção" : "Adicionar"}
-                      </button>
-                    </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+            <section className="panel" aria-labelledby="collection-items-heading" aria-busy={busy}>
+              <h2 id="collection-items-heading">Obras</h2>
+              {!titles.length && (
+                <p className="muted">
+                  {own
+                    ? "Coleção vazia. Busque acima ou use “Adicionar à coleção” na página de uma obra."
+                    : "Coleção vazia."}
+                </p>
+              )}
+              {own ? (
+                <ol className="collection-items">
+                  {titles.map((title, index) => {
+                    const name = titleName(title, known[title]);
+                    return (
+                      <li className="collection-row" key={title}>
+                        <span className="collection-position" aria-hidden="true">
+                          {index + 1}
+                        </span>
+                        <Link className="collection-thumb" href={"/obra/" + encodeURIComponent(title)} tabIndex={-1}>
+                          {known[title] ? <Poster title={known[title]} /> : <div className="poster art-0" />}
+                        </Link>
+                        <span className="collection-row-name">
+                          <Link href={"/obra/" + encodeURIComponent(title)}>
+                            <strong>{name}</strong>
+                          </Link>
+                          {known[title] && <small>{known[title].year}</small>}
+                        </span>
+                        <span className="collection-row-actions">
+                          <button
+                            type="button"
+                            disabled={busy || index === 0}
+                            aria-label={"Subir " + name}
+                            title="Subir"
+                            onClick={() => saveItems(moveTitle(titles, index, -1), "Ordem salva.")}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy || index === titles.length - 1}
+                            aria-label={"Descer " + name}
+                            title="Descer"
+                            onClick={() => saveItems(moveTitle(titles, index, 1), "Ordem salva.")}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            aria-label={"Remover " + name + " da coleção"}
+                            title="Remover da coleção"
+                            onClick={() => saveItems(removeTitle(titles, title), "Obra removida.")}
+                          >
+                            <UiIcon name="trash" />
+                          </button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <div className="grid">
+                  {titles.map((title) => (
+                    <TitleCard key={title} id={title} title={known[title]} />
                   ))}
                 </div>
               )}
             </section>
-          )}
-          <section className="panel" aria-labelledby="collection-items-heading" aria-busy={busy}>
-            <h2 id="collection-items-heading">Obras</h2>
-            {!titles.length && (
-              <p className="muted">
-                {own
-                  ? "Coleção vazia. Busque acima ou use “Adicionar à coleção” na página de uma obra."
-                  : "Coleção vazia."}
-              </p>
-            )}
-            {own ? (
-              <ol className="collection-items">
-                {titles.map((title, index) => {
-                  const name = titleName(title, known[title]);
-                  return (
-                    <li className="collection-row" key={title}>
-                      <span className="collection-position" aria-hidden="true">
-                        {index + 1}
-                      </span>
-                      <Link className="collection-thumb" href={"/obra/" + encodeURIComponent(title)} tabIndex={-1}>
-                        {known[title] ? <Poster title={known[title]} /> : <div className="poster art-0" />}
-                      </Link>
-                      <span className="collection-row-name">
-                        <Link href={"/obra/" + encodeURIComponent(title)}>
-                          <strong>{name}</strong>
-                        </Link>
-                        {known[title] && <small>{known[title].year}</small>}
-                      </span>
-                      <span className="collection-row-actions">
-                        <button
-                          type="button"
-                          disabled={busy || index === 0}
-                          aria-label={"Subir " + name}
-                          title="Subir"
-                          onClick={() => saveItems(moveTitle(titles, index, -1), "Ordem salva.")}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy || index === titles.length - 1}
-                          aria-label={"Descer " + name}
-                          title="Descer"
-                          onClick={() => saveItems(moveTitle(titles, index, 1), "Ordem salva.")}
-                        >
-                          ↓
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          aria-label={"Remover " + name + " da coleção"}
-                          title="Remover da coleção"
-                          onClick={() => saveItems(removeTitle(titles, title), "Obra removida.")}
-                        >
-                          <UiIcon name="trash" />
-                        </button>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            ) : (
-              <div className="grid">
-                {titles.map((title) => (
-                  <TitleCard key={title} id={title} title={known[title]} />
-                ))}
-              </div>
-            )}
-          </section>
-        </>
-      )}
-    </main>
+          </>
+        )}
+      </main>
+    </>
   );
 }

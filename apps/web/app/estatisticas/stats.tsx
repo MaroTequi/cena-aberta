@@ -80,129 +80,134 @@ export function StatsPage() {
     : [];
   const monthMax = Math.max(0, ...(stats?.byMonth ?? []));
   return (
-    <main className="wrap friends-page stats-page">
+    <>
       <UserPageHeader current="/estatisticas" />
-      <div className="room-intro stats-intro">
-        <div>
-          <span className="room-eyebrow">SUA RETROSPECTIVA</span>
-          <h1>Estatísticas de {year}</h1>
-          <p>Tudo o que você registrou no Diário durante o ano. Sessões sem data ficam de fora.</p>
-        </div>
-        <label className="stats-year">
-          Ano
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {years.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      {!ready && <p role="status">Carregando estatísticas…</p>}
-      {ready && loaded.goalError && (
-        <p role="alert" className="message error">
-          Meta: {loaded.goalError}
-        </p>
-      )}
-      {ready && loaded.goal && (
-        <AnnualGoal
-          key={year}
-          goal={loaded.goal}
-          onSaved={(goal) => setLoaded((old) => (old && old.year === goal.year ? { ...old, goal } : old))}
-        />
-      )}
-      {ready && loaded.statsError && (
-        <p role="alert" className="message error">
-          {loaded.statsError} <button onClick={() => retry((n) => n + 1)}>Tentar novamente</button>
-        </p>
-      )}
-      {stats && !stats.viewings && (
-        <section className="panel">
-          <p className="muted">
-            Nenhuma sessão com data registrada em {year}. Marque obras como vistas ou registre sessões no Diário para
-            montar sua retrospectiva.
-          </p>
-        </section>
-      )}
-      {stats && stats.viewings > 0 && (
-        <>
-          <section className="stats-tiles" aria-label="Totais do ano">
-            {[
-              ["Sessões", String(stats.viewings)],
-              ["Obras diferentes", String(stats.distinctTitles)],
-              ["Revisões", String(stats.rewatches)],
-              ["Tempo em filmes", formatMinutes(stats.minutes)],
-            ].map(([label, value]) => (
-              <div className="stats-tile" key={label}>
-                <strong>{value}</strong>
-                <span>{label}</span>
-              </div>
-            ))}
-          </section>
-          <section className="panel" aria-labelledby="stats-months">
-            <h2 id="stats-months">Sessões por mês</h2>
-            <ol className="stats-months">
-              {stats.byMonth.map((count, index) => (
-                <li key={monthLabels[index]} aria-label={monthLabels[index] + ": " + count + " sessões"}>
-                  <span className="stats-month-value" aria-hidden="true">
-                    {count || ""}
-                  </span>
-                  <span className="stats-month-track" aria-hidden="true">
-                    <span className="stats-month-fill" style={{ height: barPercent(count, monthMax) + "%" }} />
-                  </span>
-                  <span className="stats-month-label" aria-hidden="true">
-                    {monthLabels[index]}
-                  </span>
-                </li>
+      <main className="wrap friends-page stats-page">
+        <div className="room-intro stats-intro">
+          <div>
+            <span className="room-eyebrow">SUA RETROSPECTIVA</span>
+            <h1>Estatísticas de {year}</h1>
+            <p>Tudo o que você registrou no Diário durante o ano. Sessões sem data ficam de fora.</p>
+          </div>
+          <label className="stats-year">
+            Ano
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {years.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
               ))}
-            </ol>
+            </select>
+          </label>
+        </div>
+        {!ready && <p role="status">Carregando estatísticas…</p>}
+        {ready && loaded.goalError && (
+          <p role="alert" className="message error">
+            Meta: {loaded.goalError}
+          </p>
+        )}
+        {ready && loaded.goal && (
+          <AnnualGoal
+            key={year}
+            goal={loaded.goal}
+            onSaved={(goal) => setLoaded((old) => (old && old.year === goal.year ? { ...old, goal } : old))}
+          />
+        )}
+        {ready && loaded.statsError && (
+          <p role="alert" className="message error">
+            {loaded.statsError} <button onClick={() => retry((n) => n + 1)}>Tentar novamente</button>
+          </p>
+        )}
+        {stats && !stats.viewings && (
+          <section className="panel">
+            <p className="muted">
+              Nenhuma sessão com data registrada em {year}. Marque obras como vistas ou registre sessões no Diário para
+              montar sua retrospectiva.
+            </p>
           </section>
-          <div className="stats-columns">
-            <section className="panel" aria-labelledby="stats-formats">
-              <h2 id="stats-formats">Por formato</h2>
-              <p className="muted">Obras diferentes vistas no ano.</p>
-              <Bars rows={formats} label="Obras por formato" />
+        )}
+        {stats && stats.viewings > 0 && (
+          <>
+            <section className="stats-tiles" aria-label="Totais do ano">
+              {[
+                ["Sessões", String(stats.viewings)],
+                ["Obras diferentes", String(stats.distinctTitles)],
+                ["Revisões", String(stats.rewatches)],
+                ["Tempo em filmes", formatMinutes(stats.minutes)],
+              ].map(([label, value]) => (
+                <div className="stats-tile" key={label}>
+                  <strong>{value}</strong>
+                  <span>{label}</span>
+                </div>
+              ))}
             </section>
-            <section className="panel" aria-labelledby="stats-genres">
-              <h2 id="stats-genres">Gêneros favoritos</h2>
-              {stats.topGenres.length ? (
-                <Bars rows={stats.topGenres.map((g) => ({ label: g.name, count: g.count }))} label="Obras por gênero" />
+            <section className="panel" aria-labelledby="stats-months">
+              <h2 id="stats-months">Sessões por mês</h2>
+              <ol className="stats-months">
+                {stats.byMonth.map((count, index) => (
+                  <li key={monthLabels[index]} aria-label={monthLabels[index] + ": " + count + " sessões"}>
+                    <span className="stats-month-value" aria-hidden="true">
+                      {count || ""}
+                    </span>
+                    <span className="stats-month-track" aria-hidden="true">
+                      <span className="stats-month-fill" style={{ height: barPercent(count, monthMax) + "%" }} />
+                    </span>
+                    <span className="stats-month-label" aria-hidden="true">
+                      {monthLabels[index]}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+            <div className="stats-columns">
+              <section className="panel" aria-labelledby="stats-formats">
+                <h2 id="stats-formats">Por formato</h2>
+                <p className="muted">Obras diferentes vistas no ano.</p>
+                <Bars rows={formats} label="Obras por formato" />
+              </section>
+              <section className="panel" aria-labelledby="stats-genres">
+                <h2 id="stats-genres">Gêneros favoritos</h2>
+                {stats.topGenres.length ? (
+                  <Bars
+                    rows={stats.topGenres.map((g) => ({ label: g.name, count: g.count }))}
+                    label="Obras por gênero"
+                  />
+                ) : (
+                  <p className="muted">Sem gêneros no catálogo para estas obras.</p>
+                )}
+              </section>
+            </div>
+            <section className="panel" aria-labelledby="stats-ratings">
+              <h2 id="stats-ratings">Suas notas</h2>
+              {stats.averageRating === null ? (
+                <p className="muted">
+                  Nenhum filme visto no ano tem nota. Séries são avaliadas por episódio e não entram aqui.
+                </p>
               ) : (
-                <p className="muted">Sem gêneros no catálogo para estas obras.</p>
+                <>
+                  <p className="stats-average">
+                    <strong>{toStars(stats.averageRating)}★</strong> de média
+                    <small> · filmes vistos no ano; séries são avaliadas por episódio</small>
+                  </p>
+                  <Bars rows={ratingBuckets(stats.ratingHistogram).reverse()} label="Quantidade de obras por nota" />
+                </>
               )}
             </section>
-          </div>
-          <section className="panel" aria-labelledby="stats-ratings">
-            <h2 id="stats-ratings">Suas notas</h2>
-            {stats.averageRating === null ? (
-              <p className="muted">
-                Nenhum filme visto no ano tem nota. Séries são avaliadas por episódio e não entram aqui.
-              </p>
-            ) : (
-              <>
-                <p className="stats-average">
-                  <strong>{toStars(stats.averageRating)}★</strong> de média
-                  <small> · filmes vistos no ano; séries são avaliadas por episódio</small>
-                </p>
-                <Bars rows={ratingBuckets(stats.ratingHistogram).reverse()} label="Quantidade de obras por nota" />
-              </>
+            {stats.topRated.length > 0 && (
+              <section className="panel" aria-labelledby="stats-top">
+                <h2 id="stats-top">Mais bem avaliados</h2>
+                <div className="grid">
+                  {stats.topRated.map((item) => (
+                    <TitleCard key={item.title} id={item.title} title={known[item.title]}>
+                      <span className="review-score">★ {toStars(item.rating)}</span>
+                    </TitleCard>
+                  ))}
+                </div>
+              </section>
             )}
-          </section>
-          {stats.topRated.length > 0 && (
-            <section className="panel" aria-labelledby="stats-top">
-              <h2 id="stats-top">Mais bem avaliados</h2>
-              <div className="grid">
-                {stats.topRated.map((item) => (
-                  <TitleCard key={item.title} id={item.title} title={known[item.title]}>
-                    <span className="review-score">★ {toStars(item.rating)}</span>
-                  </TitleCard>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-    </main>
+          </>
+        )}
+      </main>
+    </>
   );
 }

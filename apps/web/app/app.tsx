@@ -1,13 +1,11 @@
 "use client";
-import { NotificationBell } from "./notification-bell";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { signIn, signOut } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { EpisodeRatings } from "./episode-ratings";
 import { CardTitle } from "./card-title";
 import { ThemePicker } from "./theme-picker";
 import { CatalogSearch } from "./catalog-search";
-import { CatalogDrawer } from "./catalog-drawer";
 import { FilmRanking, rankingCategories } from "./film-ranking";
 import type { Release } from "../lib/releases";
 import type { Title } from "../lib/types";
@@ -27,7 +25,7 @@ import { AddToCollection } from "./title-social/add-to-collection";
 import { RecommendTitle } from "./title-social/recommend-title";
 import { TitleFriends } from "./title-social/title-friends";
 import { ReviewSocial } from "./title-social/review-social";
-import { userPages } from "./user-pages";
+import { MainHeader, categories } from "./main-header";
 
 type Entry = {
   title: string;
@@ -95,12 +93,6 @@ const demoEpisodeRatings = [
   { viewer: "Rafael", episode: 1, rating: 6 },
   { viewer: "Bia", episode: 2, rating: 10 },
   { viewer: "Diego", episode: 3, rating: 7 },
-];
-const categories = [
-  ["all", "Explorar"],
-  ["movie", "Filmes"],
-  ["tv", "Séries"],
-  ["anime", "Animes"],
 ];
 const labels: Record<string, string> = {
   "demo-ultimo-rolo": "O Último Rolo",
@@ -749,108 +741,15 @@ export function App({
   }
   return (
     <>
-      <header className="top">
-        <div className="wrap nav">
-          <button className="logo" onClick={() => changeTab("all")}>
-            <span className="mark">◈</span> cena<span>aberta</span>
-          </button>
-          {authenticated && (
-            <nav aria-label="Catálogo">
-              {categories.map(([id, name]) => (
-                <button
-                  key={id}
-                  className={(tab === id ? "nav-active " : "") + "catalog-desktop-category"}
-                  onClick={() => changeTab(id)}
-                >
-                  {name}
-                </button>
-              ))}
-              <CatalogDrawer
-                categories={categories.map(([id, name]) => [id, id === "all" ? "Todos" : name])}
-                current={tab}
-                onSelect={changeTab}
-                links={userPages}
-              />
-              <a className="room-nav-link" href="/salas">
-                <UiIcon name="card" />
-                Sélete
-              </a>
-              {userPages.map((link) => (
-                <a key={link.href} className="room-nav-link catalog-desktop-category" href={link.href}>
-                  <UiIcon name={link.icon} />
-                  {link.label}
-                </a>
-              ))}
-            </nav>
-          )}
-          <div className={authenticated ? "account account-signed-in" : "account"}>
-            {authenticated ? (
-              <>
-                <NotificationBell />
-                <button
-                  type="button"
-                  className="nav-profile"
-                  aria-label="Meu perfil"
-                  title="Meu perfil"
-                  aria-current={tab === "profile" && !pageTitle && owned ? "page" : undefined}
-                  onClick={() => changeTab("profile")}
-                >
-                  {data?.profile ? (
-                    <ProfileAvatar name={data.profile.name} avatar={data.profile.avatar} />
-                  ) : (
-                    <span className="profile-avatar profile-initial" aria-hidden="true">
-                      <svg
-                        width="17"
-                        height="17"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      >
-                        <circle cx="12" cy="8" r="3.5" />
-                        <path d="M5 20v-1a7 7 0 0 1 14 0v1" />
-                      </svg>
-                    </span>
-                  )}
-                  <span className="nav-profile-label">Meu perfil</span>
-                </button>
-                <button
-                  type="button"
-                  className="nav-signout"
-                  aria-label="Sair"
-                  title="Sair da conta"
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5m3-12 4 4-4 4m-5-4h9" />
-                  </svg>
-                  <span>Sair</span>
-                </button>
-              </>
-            ) : emailAccounts ? (
-              <>
-                <a className="account-link nav-login" href="/conta">
-                  Entrar
-                </a>
-                <a className="account-link primary" href="/conta?modo=register">
-                  Criar conta
-                </a>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <MainHeader
+        authenticated={authenticated}
+        emailAccounts={emailAccounts}
+        tab={tab}
+        profile={data?.profile}
+        profileActive={tab === "profile" && !pageTitle && owned}
+        onCategory={changeTab}
+        onProfile={() => changeTab("profile")}
+      />
       <main className="wrap">
         {error && (
           <p role="alert" className="message error">

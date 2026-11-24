@@ -5,12 +5,15 @@ export function CatalogDrawer({
   current,
   onSelect,
   links = [],
+  currentLink = "",
 }: {
   categories: string[][];
   current: string;
   onSelect: (id: string) => void;
   /** Páginas extras (Feed, Coleções…) que no celular saem da barra e entram no menu. */
   links?: readonly { href: string; label: string }[];
+  /** Caminho da página extra aberta, para destacá-la. */
+  currentLink?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null),
     trigger = useRef<HTMLButtonElement>(null);
@@ -90,7 +93,12 @@ export function CatalogDrawer({
             </button>
           ))}
           {links.map((link) => (
-            <a key={link.href} className="catalog-drawer-link" href={link.href}>
+            <a
+              key={link.href}
+              className="catalog-drawer-link"
+              href={link.href}
+              aria-current={currentLink === link.href ? "page" : undefined}
+            >
               {link.label}
               <span aria-hidden="true">→</span>
             </a>

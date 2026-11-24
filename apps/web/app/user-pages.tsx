@@ -1,52 +1,43 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NotificationBell } from "./notification-bell";
-import { UiIcon } from "./ui-icons";
+import { useRouter } from "next/navigation";
+import { MainHeader } from "./main-header";
 import { Poster } from "./title-parts";
 import { CardTitle } from "./card-title";
 import { api } from "../lib/client-api";
 import type { Title } from "../lib/types";
 
-/** Páginas da área pessoal que aparecem na navegação (topo do app e cabeçalho das páginas avulsas). */
-export const userPages = [
-  { href: "/feed", label: "Feed", icon: "feed" },
-  { href: "/colecoes", label: "Coleções", icon: "list" },
-  { href: "/estatisticas", label: "Estatísticas", icon: "chart" },
-] as const;
-
 /**
- * Cabeçalho das páginas avulsas (feed, coleções, estatísticas), no mesmo estilo de Amigos e Salas.
+ * Cabeçalho das páginas avulsas (feed, coleções, estatísticas): o mesmo cabeçalho principal da home, para quem entra
+ * aqui não perder a navegação. Renderize antes do `<main>`.
  * @param current caminho da página aberta, para marcar o link ativo
  */
 export function UserPageHeader({ current }: { current: string }) {
+  const router = useRouter();
+  const [profile, setProfile] = useState<{ name: string; avatar?: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    api<{ profile?: { name: string; avatar?: string } }>("me?summary=true")
+      .then((me) => {
+        if (active && me.profile) setProfile(me.profile);
+      })
+      .catch(() => {
+        // Sem o avatar o botão mostra o ícone padrão; a navegação continua funcionando.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   return (
-    <>
-      <header className="room-header">
-        <Link className="account-brand" href="/">
-          Cena Aberta
-        </Link>
-        <div className="row">
-          <NotificationBell />
-          <Link className="room-nav-button" href="/?aba=profile">
-            Meu perfil
-          </Link>
-        </div>
-      </header>
-      <nav className="user-pages-nav" aria-label="Sua área">
-        {userPages.map((page) => (
-          <Link
-            key={page.href}
-            href={page.href}
-            className="room-nav-button"
-            aria-current={current === page.href ? "page" : undefined}
-          >
-            <UiIcon name={page.icon} />
-            {page.label}
-          </Link>
-        ))}
-      </nav>
-    </>
+    <MainHeader
+      authenticated
+      tab=""
+      activePage={current}
+      profile={profile}
+      onCategory={(id) => router.push("/?aba=" + id)}
+      onProfile={() => router.push("/?aba=profile")}
+    />
   );
 }
 

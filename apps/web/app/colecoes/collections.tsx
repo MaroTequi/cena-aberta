@@ -70,78 +70,80 @@ export function CollectionsPage() {
     }
   }
   return (
-    <main className="wrap friends-page collections-page">
+    <>
       <UserPageHeader current="/colecoes" />
-      <div className="room-intro">
-        <span className="room-eyebrow">SUAS LISTAS, DO SEU JEITO</span>
-        <h1>Coleções</h1>
-        <p>Junte obras por tema, clima ou maratona. A ordem é você quem escolhe.</p>
-      </div>
-      <section className="panel">
-        <h2>Nova coleção</h2>
-        <form className="form" onSubmit={create}>
-          <label>
-            Nome
-            <input
-              value={name}
-              required
-              maxLength={100}
-              placeholder="Ex.: Para ver no domingo"
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <label>
-            Descrição (opcional)
-            <textarea value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
-          </label>
-          <div className="row">
-            <button className="primary" disabled={busy || !name.trim()}>
-              Criar coleção
-            </button>
-          </div>
-        </form>
-      </section>
-      {error && (
-        <p role="alert" className="message error">
-          {error}{" "}
-          {!items && (
-            <button
-              onClick={() => {
-                setError("");
-                retry((n) => n + 1);
-              }}
-            >
-              Tentar novamente
-            </button>
-          )}
-        </p>
-      )}
-      {notice && (
-        <p role="status" className="message">
-          {notice}
-        </p>
-      )}
-      <section className="panel" aria-busy={!items}>
-        <h2>Minhas coleções {items && <span className="friend-count">{items.length}</span>}</h2>
-        {!items && !error && <p role="status">Carregando coleções…</p>}
-        {items && !items.length && <p className="muted">Você ainda não criou nenhuma coleção.</p>}
-        <div className="collection-grid">
-          {items?.map((collection) => (
-            <CollectionCard key={collection.id} collection={collection} known={known}>
-              <button
-                type="button"
-                className="collection-delete"
-                disabled={busy}
-                aria-label={"Excluir a coleção " + collection.name}
-                title="Excluir coleção"
-                onClick={() => void remove(collection)}
-              >
-                <UiIcon name="trash" />
-              </button>
-            </CollectionCard>
-          ))}
+      <main className="wrap friends-page collections-page">
+        <div className="room-intro">
+          <span className="room-eyebrow">SUAS LISTAS, DO SEU JEITO</span>
+          <h1>Coleções</h1>
+          <p>Junte obras por tema, clima ou maratona. A ordem é você quem escolhe.</p>
         </div>
-      </section>
-    </main>
+        <section className="panel">
+          <h2>Nova coleção</h2>
+          <form className="form" onSubmit={create}>
+            <label>
+              Nome
+              <input
+                value={name}
+                required
+                maxLength={100}
+                placeholder="Ex.: Para ver no domingo"
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label>
+              Descrição (opcional)
+              <textarea value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} />
+            </label>
+            <div className="row">
+              <button className="primary" disabled={busy || !name.trim()}>
+                Criar coleção
+              </button>
+            </div>
+          </form>
+        </section>
+        {error && (
+          <p role="alert" className="message error">
+            {error}{" "}
+            {!items && (
+              <button
+                onClick={() => {
+                  setError("");
+                  retry((n) => n + 1);
+                }}
+              >
+                Tentar novamente
+              </button>
+            )}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="message">
+            {notice}
+          </p>
+        )}
+        <section className="panel" aria-busy={!items}>
+          <h2>Minhas coleções {items && <span className="friend-count">{items.length}</span>}</h2>
+          {!items && !error && <p role="status">Carregando coleções…</p>}
+          {items && !items.length && <p className="muted">Você ainda não criou nenhuma coleção.</p>}
+          <div className="collection-grid">
+            {items?.map((collection) => (
+              <CollectionCard key={collection.id} collection={collection} known={known}>
+                <button
+                  type="button"
+                  className="collection-delete"
+                  disabled={busy}
+                  aria-label={"Excluir a coleção " + collection.name}
+                  title="Excluir coleção"
+                  onClick={() => void remove(collection)}
+                >
+                  <UiIcon name="trash" />
+                </button>
+              </CollectionCard>
+            ))}
+          </div>
+        </section>
+      </main>
+    </>
   );
 }
