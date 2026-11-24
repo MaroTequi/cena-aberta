@@ -7,7 +7,13 @@ const reasons = {
   closedByLeave: "A sala foi desfeita porque restaria apenas um participante.",
   expired: "O prazo da sala terminou.",
 };
-type Item = { kind: "friend" | "room" | keyof typeof reasons; target: string; label: string; sender: string };
+type Item = {
+  kind: "friend" | "room" | "recommendation" | keyof typeof reasons;
+  target: string;
+  label: string;
+  sender: string;
+  id?: string | null;
+};
 type Inbox = { items: Item[]; total: number };
 
 export function NotificationBell() {
@@ -59,6 +65,17 @@ export function NotificationBell() {
       setFailed(true);
     }
   }
+  // Recomendação sai do sino quando a pessoa abre a obra ou marca como lida.
+  async function readRecommendation(id: string) {
+    try {
+      // keepalive: o clique no link troca de página e não pode cancelar a marcação.
+      const response = await fetch("/api/v1/recommendations/" + id + "/read", { method: "PUT", keepalive: true });
+      if (!response.ok) throw Error();
+      refresh((n) => n + 1);
+    } catch {
+      setFailed(true);
+    }
+  }
   const total = inbox?.total ?? 0;
   return (
     <>
@@ -97,8 +114,32 @@ export function NotificationBell() {
         {inbox?.items.length ? (
           <ul>
             {inbox.items.map((item) => (
-              <li key={item.kind + item.target}>
-                {item.kind === "friend" || item.kind === "room" ? (
+              <li key={item.kind + item.target + (item.id ?? "")}>
+                {item.kind === "recommendation" ? (
+                  <div className="room-end-notice notification-recommendation">
+                    <a
+                      href={"/obra/" + encodeURIComponent(item.target)}
+                      onClick={() => {
+                        if (item.id) void readRecommendation(item.id);
+                      }}
+                    >
+                      <UiIcon name="send" />
+                      <span>
+                        <strong>{item.label}</strong>
+                        <small>Recomendado por {item.sender}</small>
+                      </span>
+                    </a>
+                    <button
+                      type="button"
+                      aria-label={"Marcar recomendação de " + item.label + " como lida"}
+                      onClick={() => {
+                        if (item.id) void readRecommendation(item.id);
+                      }}
+                    >
+                      Marcar como lida
+                    </button>
+                  </div>
+                ) : item.kind === "friend" || item.kind === "room" ? (
                   <a
                     href={
                       item.kind === "friend"
@@ -138,7 +179,7 @@ export function NotificationBell() {
         {inbox && total > inbox.items.length && (
           <p>
             Exibindo os {inbox.items.length} mais recentes. <a href="/amigos">Meus amigos</a> ·{" "}
-            <a href="/salas">Minhas salas</a>
+            <a href="/salas">Minhas salas</a> · <a href="/feed">Recomendações</a>
           </p>
         )}
       </dialog>
