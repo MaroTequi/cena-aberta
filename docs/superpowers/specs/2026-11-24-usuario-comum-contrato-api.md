@@ -22,13 +22,14 @@
 
 Uma coleção é uma lista ordenada de obras criada pelo usuário. Quem não é o dono só vê as coleções quando o dono tem `profile.show_lists=true`.
 
-### `GET /api/v1/me/collections`
+### `GET /api/v1/me/collections[?title=<id da obra>]`
 Coleções do próprio usuário, das mais novas para as mais antigas (até 100).
 ```json
 {"items":[{"id":"0f8fad5b-d9cb-469f-a165-70867728950e","name":"Favoritos","description":"Os que eu revejo",
   "version":3,"count":5,"titles":["tmdb-movie-603","demo-ultimo-rolo","tmdb-tv-1399","tmdb-movie-155"]}]}
 ```
 `titles` traz até 4 obras (as primeiras posições, para a capa). `count` é o total de obras.
+Com `?title=<id da obra>` cada coleção ganha também `"has": true|false`, dizendo se a obra está nela em qualquer posição (use isto, e não `titles`, para saber se a obra já foi adicionada). `title` com formato inválido → 400 `"Identificador inválido."`.
 
 ### `POST /api/v1/me/collections`
 Corpo `{"name":"Favoritos","description":"opcional"}`. O nome é aparado e precisa ter de 1 a 100 caracteres; a descrição, até 500 (`null` vira `""`).

@@ -31,12 +31,20 @@ public class UserCollections {
     /**
      * Lista as coleções do próprio usuário.
      * @param actor usuário da sessão
-     * @return {items:[{id,name,description,version,count,titles}]}, titles = até 4 primeiras obras
+     * @param title obra opcional: quando enviada, cada coleção ganha {has} dizendo se a obra está nela (em qualquer posição)
+     * @return {items:[{id,name,description,version,count,titles[,has]}]}, titles = até 4 primeiras obras
      */
     @GetMapping("/me/collections")
-    Map<String,Object> mine(@RequestHeader("X-Actor") String actor) {
+    Map<String,Object> mine(@RequestHeader("X-Actor") String actor,@RequestParam(required=false) String title) {
         actors.requireActive(actor);
-        return Map.of("items",summaries(actor));
+        var items=summaries(actor);
+        if(title!=null) {
+            validateTitle(title);
+            var holding=new HashSet<>(db.queryForList("select i.collection_id from collection_item i join collection c on c.id=i.collection_id where c.actor=? and i.title=?",
+                String.class,actor,title));
+            items.forEach(item -> item.put("has",holding.contains((String)item.get("id"))));
+        }
+        return Map.of("items",items);
     }
 
     /**

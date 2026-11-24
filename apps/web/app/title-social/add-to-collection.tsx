@@ -40,11 +40,11 @@ function CollectionPicker({ titleId, name }: { titleId: string; name: string }) 
   const createKey = useRef<{ name: string; key: string } | null>(null);
   useEffect(() => {
     let active = true;
-    api<{ items: CollectionSummary[] }>("me/collections")
+    api<{ items: (CollectionSummary & { has: boolean })[] }>("me/collections?title=" + encodeURIComponent(titleId))
       .then((data) => {
         if (!active) return;
         setCollections(data.items);
-        setAdded(new Set(data.items.filter((c) => c.titles.includes(titleId)).map((c) => c.id)));
+        setAdded(new Set(data.items.filter((c) => c.has).map((c) => c.id)));
       })
       .catch((e) => {
         if (active) setError(e.message);

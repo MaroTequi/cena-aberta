@@ -34,9 +34,20 @@ class UserCollectionsTest {
         var updated=service.replaceItems(ANA,id,new UserCollections.CollectionItems(0,List.of("demo-e","demo-a","demo-b","demo-c","demo-d")));
         assertEquals(1,updated.get("version"));
         assertEquals(List.of("demo-e","demo-a","demo-b","demo-c","demo-d"),items(updated).stream().map(i -> i.get("title")).toList());
-        var summary=items(service.mine(ANA)).getFirst();
+        var summary=items(service.mine(ANA,null)).getFirst();
         assertEquals(5,summary.get("count"));
         assertEquals(List.of("demo-e","demo-a","demo-b","demo-c"),summary.get("titles"));
+    }
+
+    @Test void mineWithTitleFlagsCollectionsHoldingItEvenBeyondTheCovers() {
+        String full=create("Cheia"), other=create("Outra");
+        service.replaceItems(ANA,full,new UserCollections.CollectionItems(0,List.of("demo-a","demo-b","demo-c","demo-d","demo-e")));
+        service.replaceItems(ANA,other,new UserCollections.CollectionItems(0,List.of("demo-a")));
+        var byId=new HashMap<String,Object>();
+        for(var item:items(service.mine(ANA,"demo-e"))) byId.put((String)item.get("id"),item.get("has"));
+        assertEquals(Map.of(full,true,other,false),byId);
+        assertFalse(items(service.mine(ANA,null)).getFirst().containsKey("has"));
+        fails(400,() -> service.mine(ANA,"../etc"));
     }
 
     @Test void staleVersionIs409AndRenameBumpsVersion() {
@@ -73,7 +84,7 @@ class UserCollectionsTest {
         var input=new UserCollections.CollectionInput("Lista","",null);
         var first=service.create(ANA,"chave-12345",input);
         assertEquals(first.get("id"),service.create(ANA,"chave-12345",input).get("id"));
-        assertEquals(1,items(service.mine(ANA)).size());
+        assertEquals(1,items(service.mine(ANA,null)).size());
         fails(409,() -> service.create(ANA,"chave-12345",new UserCollections.CollectionInput("Outra","",null)));
     }
 
@@ -92,6 +103,6 @@ class UserCollectionsTest {
         assertEquals(1,items(service.byProfile(ANA,"ana")).size());
         fails(404,() -> service.byProfile(BIA,"ninguem"));
         db.update("update profile set active=false where actor=?",BIA);
-        fails(403,() -> service.mine(BIA));
+        fails(403,() -> service.mine(BIA,null));
     }
 }
