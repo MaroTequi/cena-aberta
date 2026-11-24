@@ -68,3 +68,18 @@ export function resolveRoute(method: string, path: string): Target | null {
   const route = routes.find(([routeMethod, pattern]) => routeMethod === method && pattern.test(path));
   return route ? route[2] : null;
 }
+
+/** Rotas do social que consultam o catálogo em lote e por isso precisam do mesmo prazo de `title-batch`. */
+const BATCH_PATHS = new Set(["title-batch", "me/stats", "library-page"]);
+
+/**
+ * Prazo (ms) para o serviço interno responder.
+ * @param path caminho após /api/v1, sem barra inicial
+ * @param download true para downloads (backup e exportação), que levam mais tempo para gerar o arquivo
+ * @returns o prazo em milissegundos
+ */
+export function upstreamTimeout(path: string, download: boolean): number {
+  if (path.startsWith("rooms/") && (path.endsWith("/start") || path.endsWith("/more"))) return 65000;
+  if (BATCH_PATHS.has(path)) return 25000;
+  return download ? 30000 : 6500;
+}

@@ -1,7 +1,7 @@
 import { profileState } from "../../../../lib/profile";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../lib/auth";
-import { resolveRoute } from "../../../../lib/api-routes";
+import { resolveRoute, upstreamTimeout } from "../../../../lib/api-routes";
 
 async function proxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");
@@ -74,17 +74,7 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
       body,
       cache: "no-store",
       signal:
-        backup && path.startsWith("backups/")
-          ? request.signal
-          : AbortSignal.timeout(
-              path.startsWith("rooms/") && (path.endsWith("/start") || path.endsWith("/more"))
-                ? 65000
-                : path === "title-batch"
-                  ? 25000
-                  : download
-                    ? 30000
-                    : 6500,
-            ),
+        backup && path.startsWith("backups/") ? request.signal : AbortSignal.timeout(upstreamTimeout(path, download)),
     });
     return new Response(result.body, {
       status: result.status,

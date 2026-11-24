@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveRoute, routes } from "./api-routes.ts";
+import { resolveRoute, routes, upstreamTimeout } from "./api-routes.ts";
 
 test("resolve o serviço de destino das rotas conhecidas", () => {
   assert.equal(resolveRoute("GET", "titles/tmdb-movie-603"), "catalog");
@@ -63,4 +63,12 @@ test("rotas novas recusam método errado e ids malformados", () => {
 
 test("toda regra usa um método HTTP que o proxy exporta", () => {
   for (const [method] of routes) assert.ok(["GET", "PUT", "POST", "DELETE"].includes(method), method);
+});
+
+test("rotas que consultam o catálogo em lote ganham o prazo longo", () => {
+  for (const path of ["title-batch", "me/stats", "library-page"])
+    assert.equal(upstreamTimeout(path, false), 25000, path);
+  assert.equal(upstreamTimeout("rooms/abc/start", false), 65000);
+  assert.equal(upstreamTimeout("me/export", true), 30000);
+  assert.equal(upstreamTimeout("feed", false), 6500);
 });
