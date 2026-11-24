@@ -49,4 +49,13 @@ class ExportTest {
         fails(403,() -> { try { service.export(ANA); } catch(IOException e) { throw new UncheckedIOException(e); } });
         fails(401,() -> { try { service.export("x"); } catch(IOException e) { throw new UncheckedIOException(e); } });
     }
+
+    @Test void cellPrefixesFormulaLikeTextButNeverNumbers() {
+        assertEquals("'=1+1",Export.cell("=1+1"));
+        assertEquals("'-texto",Export.cell("-texto"));
+        assertEquals("-5",Export.cell(-5));
+        assertEquals("-2.5",Export.cell(new java.math.BigDecimal("-2.5")));
+        assertEquals("8",Export.cell(8));
+        assertEquals("",Export.cell(null));
+    }
 }

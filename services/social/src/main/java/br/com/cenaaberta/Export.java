@@ -73,13 +73,15 @@ public class Export {
         zip.closeEntry();
     }
 
-    /** Formata a célula; texto livre que começa com =,+,-,@ ganha um apóstrofo para a planilha não executá-lo como fórmula. */
+    /** Formata a célula; texto livre (String) que começa com =,+,-,@ ganha um apóstrofo para a planilha não executá-lo como fórmula. */
     static String cell(Object value) {
         if(value==null) return "";
         if(value instanceof java.sql.Timestamp || value instanceof OffsetDateTime) return Rows.instant(value);
         if(value instanceof java.sql.Date) return Rows.date(value);
         if(value instanceof Boolean flag) return flag?"sim":"não";
         String text=value.toString();
+        // Números (inclusive negativos) saem como estão: o apóstrofo só vale para texto livre.
+        if(!(value instanceof String)) return text;
         return !text.isEmpty() && "=+-@\t\r".indexOf(text.charAt(0))>=0 ? "'"+text : text;
     }
 }
