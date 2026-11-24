@@ -13,7 +13,7 @@ class LibraryTest {
  JdbcTemplate db;Library service;
  @BeforeEach void setup(){
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
- new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V4__rewatching.sql"),new ClassPathResource("db/migration/V5__film_ranking.sql"),new ClassPathResource("db/migration/V6__viewing_time.sql"),new ClassPathResource("db/migration/V8__public_evaluations.sql"),new ClassPathResource("db/migration/V25__review_spoiler_vote.sql")).execute(source);
+ new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V4__rewatching.sql"),new ClassPathResource("db/migration/V5__film_ranking.sql"),new ClassPathResource("db/migration/V6__viewing_time.sql"),new ClassPathResource("db/migration/V8__public_evaluations.sql"),new ClassPathResource("db/migration/V25__review_spoiler_vote.sql"),new ClassPathResource("db/migration/V27__usuario_comum.sql")).execute(source);
  db=new JdbcTemplate(source);
  db.update("insert into profile(actor,username,name) values(?,?,?)",ANA,"ana","Ana");
  var actors=new ActiveActors(db);
@@ -67,5 +67,31 @@ class LibraryTest {
  assertEquals(1,db.queryForObject("select count(*) from review_spoiler_vote",Integer.class));
  change("review",new Library.LibraryChange(null,null,"Texto editado",true,2));
  assertEquals(0,db.queryForObject("select count(*) from review_spoiler_vote",Integer.class));
+ }
+ @Test void ratingStampsRatedAtOnlyWhenTheValueChanges(){
+ change("rating",new Library.LibraryChange(null,8,null,null,null));
+ Object first=db.queryForObject("select rated_at from library where actor=? and title=?",Object.class,ANA,TITLE);
+ assertNotNull(first);
+ db.update("update library set rated_at=timestamp with time zone '2020-01-01 00:00:00+00' where actor=?",ANA);
+ change("rating",new Library.LibraryChange(null,8,null,null,null));
+ assertEquals(2020,db.queryForObject("select extract(year from rated_at) from library where actor=?",Integer.class,ANA));
+ change("rating",new Library.LibraryChange(null,null,null,null,null));
+ assertNull(db.queryForObject("select rated_at from library where actor=?",Object.class,ANA));
+ }
+ @Test void reviewStampsReviewedAtAndRemovingItDropsLikesAndComments(){
+ db.update("insert into profile(actor,username,name) values(?,?,?)","beto-12345","beto","Beto");
+ change("review",new Library.LibraryChange(null,null,"Gostei",false,0));
+ assertNotNull(db.queryForObject("select reviewed_at from library where actor=?",Object.class,ANA));
+ db.update("update library set reviewed_at=timestamp with time zone '2020-01-01 00:00:00+00' where actor=?",ANA);
+ change("review",new Library.LibraryChange(null,null,"Gostei",true,1));
+ assertEquals(2020,db.queryForObject("select extract(year from reviewed_at) from library where actor=?",Integer.class,ANA));
+ db.update("insert into review_like(author,title,liker) values(?,?,?)",ANA,TITLE,"beto-12345");
+ db.update("insert into review_comment(id,author,title,commenter,body) values('c1',?,?,?,'Boa')",ANA,TITLE,"beto-12345");
+ change("review",new Library.LibraryChange(null,null,"Gostei muito",true,2));
+ assertEquals(1,db.queryForObject("select count(*) from review_like",Integer.class));
+ change("review",new Library.LibraryChange(null,null,"",false,3));
+ assertNull(db.queryForObject("select reviewed_at from library where actor=?",Object.class,ANA));
+ assertEquals(0,db.queryForObject("select count(*) from review_like",Integer.class));
+ assertEquals(0,db.queryForObject("select count(*) from review_comment",Integer.class));
  }
 }
