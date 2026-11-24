@@ -20,6 +20,14 @@ import { ProfileFriend } from "./profile-friend";
 import { ReviewEditor } from "./review-editor";
 import { Icon as ActionIcon, IconAction } from "./action-icons";
 import { ProfileAvatar, ProfileForm, type Profile, type ProfileInput } from "./profile-form";
+import { LibraryPage } from "./library-page";
+import { ProfileLists } from "./profile-lists";
+import { ProfileCompatibility } from "./profile-compatibility";
+import { AddToCollection } from "./title-social/add-to-collection";
+import { RecommendTitle } from "./title-social/recommend-title";
+import { TitleFriends } from "./title-social/title-friends";
+import { ReviewSocial } from "./title-social/review-social";
+import { userPages } from "./user-pages";
 
 type Entry = {
   title: string;
@@ -37,7 +45,7 @@ type Entry = {
 };
 type Viewing = { id: string; title: string; watched_on: string | null; watched_at: string | null; rewatch: boolean };
 type PendingViewing = { title: string; name: string; watchedAt: string };
-const profileSections = ["watchlist", "ranking", "watched", "diary"] as const;
+const profileSections = ["watchlist", "ranking", "watched", "diary", "lists"] as const;
 type Section = (typeof profileSections)[number];
 type Dashboard = {
   visibility?: Record<Section, boolean>;
@@ -57,6 +65,9 @@ type Review = {
   spoiler: boolean;
   version: number;
   my_vote: boolean | null;
+  likes?: number;
+  liked?: boolean;
+  comments?: number;
 };
 type SeasonAverage = { season: number; average: number };
 type Community = {
@@ -137,92 +148,6 @@ async function api<T>(path: string, method = "GET", body?: unknown, key?: string
   return json;
 }
 type DiaryResult = { items: Viewing[]; hasMore: boolean };
-
-function LibraryPage({
-  section,
-  username,
-  dashboard,
-  render,
-}: {
-  section: "watchlist" | "watched";
-  username?: string;
-  dashboard: Dashboard;
-  render: (item: Entry, title?: Title) => ReactNode;
-}) {
-  const [page, setPage] = useState(1),
-    [attempt, retry] = useState(0);
-  const [result, setResult] = useState<{
-    page: number;
-    dashboard: Dashboard;
-    items: Entry[];
-    pages: number;
-    titles: Map<string, Title>;
-  } | null>(null);
-  const [error, setError] = useState("");
-  const strip = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let active = true;
-    setError("");
-    const params = new URLSearchParams({ section, page: String(page) });
-    if (username) params.set("username", username);
-    (async () => {
-      const { items, pages } = await api<{ items: Entry[]; pages: number }>("library-page?" + params);
-      if (!active) return;
-      if (!items.length && page > 1) {
-        setPage(page - 1);
-        return;
-      }
-      const titles = items.length
-        ? await api<Title[]>("title-batch?ids=" + encodeURIComponent(items.map((i) => i.title).join(",")))
-        : [];
-      if (active) setResult({ page, dashboard, items, pages, titles: new Map(titles.map((t) => [t.id, t])) });
-    })().catch((e) => {
-      if (active) setError(e.message);
-    });
-    return () => {
-      active = false;
-    };
-  }, [section, username, dashboard, page, attempt]);
-  useEffect(() => {
-    if (strip.current) strip.current.scrollLeft = 0;
-  }, [page]);
-  if (error)
-    return (
-      <p role="alert">
-        {error} <button onClick={() => retry((n) => n + 1)}>Tentar novamente</button>
-      </p>
-    );
-  if (!result || result.page !== page || result.dashboard !== dashboard) return <p role="status">Carregando obras…</p>;
-  return (
-    <>
-      <div ref={strip} className="grid profile-card-strip">
-        {result.items.map((item) => render(item, result.titles.get(item.title)))}
-      </div>
-      {!result.items.length && (
-        <p className="muted">{section === "watchlist" ? "Nenhuma obra salva." : "Nenhuma avaliação ou obra vista."}</p>
-      )}
-      {result.pages > 1 && (
-        <nav className="row pagination" aria-label={"Páginas de " + (section === "watched" ? "Já vistos" : "Vou ver")}>
-          <button disabled={page === 1} onClick={() => setPage(1)} aria-label="Primeira página">
-            «
-          </button>
-          <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </button>
-          <span aria-live="polite">
-            {page} de {result.pages}
-          </span>
-          <button disabled={page === result.pages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </button>
-          <button disabled={page === result.pages} onClick={() => setPage(result.pages)} aria-label="Última página">
-            »
-          </button>
-        </nav>
-      )}
-    </>
-  );
-}
 
 function DiaryDialog({
   dashboard,
@@ -844,11 +769,18 @@ export function App({
                 categories={categories.map(([id, name]) => [id, id === "all" ? "Todos" : name])}
                 current={tab}
                 onSelect={changeTab}
+                links={userPages}
               />
               <a className="room-nav-link" href="/salas">
                 <UiIcon name="card" />
                 Sélete
               </a>
+              {userPages.map((link) => (
+                <a key={link.href} className="room-nav-link catalog-desktop-category" href={link.href}>
+                  <UiIcon name={link.icon} />
+                  {link.label}
+                </a>
+              ))}
             </nav>
           )}
           <div className={authenticated ? "account account-signed-in" : "account"}>
@@ -1067,7 +999,10 @@ export function App({
                     </div>
                   </div>
                   {!owned && current?.profile && (
-                    <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                    <>
+                      <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                      <ProfileCompatibility username={current.profile.username} name={current.profile.name} />
+                    </>
                   )}
                   {owned && current?.profile && (
                     <>
@@ -1117,9 +1052,10 @@ export function App({
                             <h2>Vou ver</h2>
                             {sectionVisibility("watchlist", "Vou ver")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watchlist"
+                            diaryVisible={false}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1151,9 +1087,10 @@ export function App({
                             <h2>Já vistos e avaliações</h2>
                             {sectionVisibility("watched", "já vistos")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watched"
+                            diaryVisible={showSection("diary")}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1215,6 +1152,13 @@ export function App({
                             }}
                           />
                         </section>
+                      )}
+                      {showSection("lists") && (
+                        <ProfileLists
+                          key={current.profile.username}
+                          username={owned ? undefined : current.profile.username}
+                          visibility={sectionVisibility("lists", "listas")}
+                        />
                       )}
                       {diaryTitle && showSection("diary") && (
                         <DiaryDialog
@@ -1382,6 +1326,15 @@ export function App({
                         </>
                       )}
                     </div>
+                    <div className="row title-social-actions">
+                      <AddToCollection key={"collection-" + title.id} titleId={title.id} name={title.name} />
+                      <RecommendTitle
+                        key={"recommend-" + title.id}
+                        titleId={title.id}
+                        name={title.name}
+                        username={data.profile.username}
+                      />
+                    </div>
                     {entry.watched && (
                       <div className="form">
                         {rankControl(title.id)}
@@ -1413,6 +1366,7 @@ export function App({
                 )}
               </div>
             </div>
+            {data?.profile && <TitleFriends key={title.id} titleId={title.id} watched={entry.watched} />}
             {community && (
               <section className="community" aria-labelledby="community-heading">
                 <h3 id="community-heading">Comunidade</h3>
@@ -1451,6 +1405,13 @@ export function App({
                       watched={entry.watched}
                       text={review.review}
                       version={review.version}
+                      initial={review}
+                    />
+                    <ReviewSocial
+                      key={[title.id, review.username, review.likes, review.liked, review.comments].join("-")}
+                      titleId={title.id}
+                      author={review.username}
+                      own={review.username === data?.profile?.username}
                       initial={review}
                     />
                   </article>
