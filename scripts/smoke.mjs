@@ -550,7 +550,9 @@ try {
 
   const retired=await fetch(web+"/api/v1/me/lists",{method:"POST",headers:finalHeaders,body:"{}"});
   assert.equal(retired.status,404);
-  await request(social,"/me/visibility",{method:"PUT",body:{section:"lists",visible:true},expected:400});
+  // As coleções (usuário comum) voltaram com a seção "lists" (show_lists); uma seção desconhecida segue recusada.
+  assert.equal((await request(social,"/me/visibility",{method:"PUT",body:{section:"lists",visible:true}})).lists,true);
+  await request(social,"/me/visibility",{method:"PUT",body:{section:"inexistente",visible:true},expected:400});
   const visibilityUpdate=async(section,visible)=>{
     const r=await fetch(web+"/api/v1/me/visibility",{method:"PUT",headers:finalHeaders,body:JSON.stringify({section,visible})});assert.equal(r.status,200);
   };
