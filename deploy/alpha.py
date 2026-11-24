@@ -86,7 +86,7 @@ def backup():
         print("Copie para armazenamento privado fora da VM e execute restore-check.")
     finally:
         if writers:
-            run(COMPOSE + ["start", "--wait", "--wait-timeout", "240", *writers])
+            run(COMPOSE + ["up", "--no-build", "--no-recreate", "--no-deps", "--wait", "--wait-timeout", "240", *writers])
             print(f"Parada até confirmação de saúde: {time.monotonic()-began:.1f} s")
 
 
