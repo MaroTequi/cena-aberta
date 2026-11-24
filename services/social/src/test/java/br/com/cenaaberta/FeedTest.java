@@ -75,4 +75,26 @@ class FeedTest {
         fails(400,() -> service.feed(ANA,"ontem"));
         fails(401,() -> service.feed("curto",null));
     }
+
+    @Test void sameInstantItemsPaginateWithoutLossOrRepetition() {
+        var at=now.minusMinutes(10).withNano(0);
+        // Importação do Letterboxd: várias sessões (inclusive da mesma obra) no mesmo instante, mais nota e resenha no mesmo instante.
+        for(int i=0;i<30;i++) viewing(BIA,"demo-"+(i%25),at);
+        evaluation(BIA,"demo-x",7,"Boa",true,at);
+        var seen=new ArrayList<String>();
+        String cursor=null;
+        int pages=0;
+        do {
+            var page=service.feed(ANA,cursor);
+            for(var item:items(page)) seen.add(item.get("kind")+"/"+item.get("title"));
+            cursor=(String)page.get("next");
+            pages++;
+        } while(cursor!=null && pages<10);
+        assertEquals(32,seen.size());
+        assertEquals(2,pages);
+        var expected=new ArrayList<String>();
+        for(int i=0;i<30;i++) expected.add("watched/demo-"+(i%25));
+        expected.add("rated/demo-x"); expected.add("reviewed/demo-x");
+        assertEquals(expected.stream().sorted().toList(),seen.stream().sorted().toList());
+    }
 }

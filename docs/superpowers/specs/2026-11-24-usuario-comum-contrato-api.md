@@ -149,7 +149,7 @@ A resposta é a mesma de antes: `{"items":[...],"pages":N}`, com 24 itens por p�
 
 ## 6. Feed de amigos
 
-### `GET /api/v1/feed[?before=<ISO>]`
+### `GET /api/v1/feed[?before=<cursor>]`
 ```json
 {"items":[
   {"kind":"reviewed","actor":{"username":"bia","name":"Bia","avatar":"preset:cinema"},"title":"tmdb-movie-603",
@@ -165,7 +165,7 @@ A resposta é a mesma de antes: `{"items":[...],"pages":N}`, com 24 itens por p�
 - `rated`: a nota atual da obra, no instante `library.rated_at`. Exige `evaluation_public=true` e `hidden=false`.
 - `reviewed`: a resenha atual, no instante `library.reviewed_at`, com `rating` (se houver) e `spoiler` efetivo (o marcado pelo autor ou o decidido pelos votos de spoiler). As mesmas exigências de `rated`.
 - Linhas da biblioteca com `rated_at`/`reviewed_at` nulos (dados anteriores à V27 e importações do Letterboxd) não aparecem.
-- Empate exato de `at` na virada de página pode pular item (o cursor é só o instante).
+- `before`/`next` são opacos para o cliente: o `next` é um cursor composto (`<instante ISO>|<tipo>|<usuário>|<id da sessão>|<título>`) com ordem de desempate estável (`at` desc, tipo, usuário, id, título), então itens no mesmo instante paginam sem se perder nem repetir. Um `before` só com o instante ISO (primeira forma, sem desempate) continua válido. Basta repassar o `next` recebido, codificado na URL.
 
 ## 7. Compatibilidade
 
