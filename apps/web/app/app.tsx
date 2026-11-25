@@ -50,13 +50,6 @@ const demoEpisodeRatings=[
   {viewer:"Rafael",episode:1,rating:6},{viewer:"Bia",episode:2,rating:10},
   {viewer:"Diego",episode:3,rating:7},
 ];
-function CompleteStatus({complete,requirement}:{complete:boolean;requirement:string}) {
-  return <span className="season-watch-status" role="status" data-complete={complete}>
-    <Icon kind="watched" active={complete}/>
-    {complete?"Vi completamente":<span><strong>Vi completamente</strong><small className="completion-requirement">{requirement}</small></span>}
-  </span>;
-}
-
 function CommunityScore({average,count,demo=false,episodic=false}:{average:number|null;count:number;demo?:boolean;episodic?:boolean}) {
   return <div className="community-score">
     <div className="community-score-value"><strong>{average===null?"–":average.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:2})}</strong><span> / 5</span></div>
@@ -499,7 +492,11 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           {!owned&&!profileSections.some(key=>current.visibility?.[key])&&<p className="muted">As seções deste perfil estão privadas.</p>}</>}
         </section>)}
       </>}
-      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading"><h2>Detalhes</h2></div>
+      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading work-detail-heading">
+        <h2>Detalhes</h2>
+        {((title.format==="tv"&&seriesComplete===true)||(title.format==="seas"&&seasonComplete))&&
+          <span className="work-completion-badge" role="status"><Icon kind="watched" active/>Vi completamente</span>}
+      </div>
       {seriesPart&&<nav className="work-back-links" aria-label="Navegação da série">
         <Link className="room-nav-button" href={workHref(seriesPart.seriesId)}>
           {seriesPart.episode===undefined&&<UiIcon name="back"/>}Voltar à série
@@ -513,8 +510,6 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
         {title.format==="seas"?
           <span className="season-watch-status"><Icon kind="watched" active={entry.watched}/>{entry.watched?"Já vi":"Ainda não vi"}</span>:
           <IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>}
-        {title.format==="seas"&&seasonProgress&&!progressError&&<CompleteStatus complete={!!seasonComplete} requirement="Duas sessões de cada episódio"/>}
-        {title.format==="tv"&&typeof seriesComplete==="boolean"&&<CompleteStatus complete={seriesComplete} requirement="Duas sessões de cada episódio ou de cada temporada"/>}
         {title.format==="tv"&&seriesComplete==="unavailable"&&<span className="muted" role="status">Não foi possível verificar se você viu a série completamente.</span>}
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}
         {title.format==="seas"?<span className="season-watch-status" role="status" data-complete={!!seasonProgress?.rewatched}>
