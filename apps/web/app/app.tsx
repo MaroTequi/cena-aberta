@@ -34,6 +34,7 @@ const profileSections = ["watchlist", "ranking", "watched", "diary"] as const;
 type Section = typeof profileSections[number];
 type Dashboard={visibility?:Record<Section,boolean>;ranking?:{title:string;tier:number}[];needsProfile?:boolean;profile?:Profile;library?:Entry[];diaryHasMore?:boolean;viewings?:Viewing[]};
 type Review={username:string;name:string;avatar?:string;rating:number|null;review:string;spoiler:boolean;version:number;my_vote:boolean|null};
+type RankedSeries={title:string;tier:number;average:number};
 type SeasonProgress={watched:number;total:number;average:number|null};
 type SeasonAverage={season:number;average:number};
 type Community={seasons?:SeasonAverage[];average:number|null;rating_count:number;episode_rating_count?:number;reviews:Review[]};
@@ -228,6 +229,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
   const [data,setData]=useState<Dashboard|null>(null),[other,setOther]=useState<Dashboard|null>(null);
   const [title,setTitle]=useState<Title|null>(null),[community,setCommunity]=useState<Community|null>(null);
   const [error,setError]=useState(""),[notice,setNotice]=useState(""),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false);
+  const [rankedSeries,setRankedSeries]=useState<RankedSeries[]>([]);
   const [rankItems,setRankItems]=useState<{title:string;tier:number}[]|null>(null);
   const [viewing,setViewing]=useState<Viewing|null>(null);
   const [pendingViewing,setPendingViewing]=useState<PendingViewing|null>(null);
@@ -312,8 +314,8 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
   useEffect(()=>{
     if(!data?.profile||!pageTitle)return;
     let current=true;
-    api<{items:{title:string;tier:number}[]}>("me/ranking")
-      .then(result=>{if(current)setRankItems(result.items);})
+    api<{items:{title:string;tier:number}[];automatic:RankedSeries[]}>("me/ranking")
+      .then(result=>{if(current){setRankItems(result.items);setRankedSeries(result.automatic);}})
       .catch(error=>{if(current)fail(error);});
     return ()=>{current=false;};
   },[data,pageTitle]);
@@ -382,6 +384,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
     return ()=>{current=false;};
   },[seasonProgressPath,data,progressRetry]);
   const complete=!!seasonProgress&&seasonProgress.total>0&&seasonProgress.watched===seasonProgress.total;
+  const seriesScore=rankedSeries.find(item=>item.title===title?.id);
   const entry=data?.library?.find(item=>item.title===title?.id)??empty;
   const current=other??data;
   const owned=!other||other.profile?.username===data?.profile?.username;
@@ -511,7 +514,10 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           </p>:<p role="status">Carregando progresso…</p>}
       </div>}
       {entry.watched&&<div className="form">
-      {title.format!=="seas"&&rankControl(title.id)}
+      {title.format==="tv"?(seriesScore?
+        <p><strong>Minha média</strong> · ★ {seriesScore.average.toLocaleString("pt-BR")} / 5 · {rankingCategories[seriesScore.tier]}</p>:
+        <p className="muted">Avalie os episódios para calcular a nota e a categoria da série.</p>):
+        title.format!=="seas"&&rankControl(title.id)}
       {title.format!=="tv"&&title.format!=="seas"&&<StarRating key={title.id} disabled={busy} value={entry.rating} onChange={rating=>{void update("rating",{rating});}}/>}
       <ReviewEditor key={title.id} title={title.id} initial={entry} disabled={busy} onPending={setReviewPending} onSaved={async()=>{await refresh();await refreshCommunity(title.id);}} visibility={visibilityControl({...entry,title:title.id})}/>
       </div>}</>}

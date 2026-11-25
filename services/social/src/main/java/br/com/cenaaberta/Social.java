@@ -117,11 +117,37 @@ public class Social {
 
         return Map.of("version",db.queryForObject("select ranking_version from profile where actor=?",Integer.class,actor),
 
-            "items",db.queryForList("select title,tier from film_ranking where actor=? order by tier,position",actor));
+            "items",manualRanking(actor),"automatic",seriesRanking(actor,false));
 
     }
 
 
+
+    private List<Map<String,Object>> manualRanking(String actor) {
+        return db.queryForList("select title,tier from film_ranking where actor=? order by tier,position",actor);
+    }
+
+    private List<Map<String,Object>> seriesRanking(String actor,boolean publicOnly) {
+        String publicFilter=publicOnly?"and l.evaluation_public and not l.hidden and ep.evaluation_public and not ep.hidden ":"";
+        var seasons=db.queryForList("""
+            select e.title,e.season,sum(e.rating) as total,count(*) as votes
+            from episode_rating e
+            join library l on l.actor=e.actor and l.title=e.title and l.watched
+            join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode)
+            where e.actor=?
+            """+publicFilter+"group by e.title,e.season order by e.title,e.season",actor);
+        var scores=new TreeMap<String,IntSummaryStatistics>();
+        for(var season:seasons) {
+            int score=seasonHalfStars(((Number)season.get("total")).longValue(),((Number)season.get("votes")).longValue());
+            scores.computeIfAbsent((String)season.get("title"),id->new IntSummaryStatistics()).accept(score);
+        }
+        return scores.entrySet().stream().map(item->{
+            int score=seriesHalfStars(item.getValue());
+            int tier=5-(score+1)/2;
+            return Map.<String,Object>of("title",item.getKey(),"tier",tier,"average",score/2.0);
+        }).sorted(Comparator.comparingDouble((Map<String,Object> item)->((Number)item.get("average")).doubleValue()).reversed())
+            .toList();
+    }
 
     @PutMapping("/me/ranking")
 
@@ -160,7 +186,8 @@ public class Social {
 
                 fail(HttpStatus.BAD_REQUEST,"Adicione apenas obras marcadas como assistidas.");
 
-            if(!previous.contains(item.title()))verifyTitle(item.title());
+            if(!previous.contains(item.title())&&"tv".equals(verifyTitle(item.title())))
+                fail(HttpStatus.BAD_REQUEST,"A categoria da série vem da média das temporadas.");
 
         }
 
@@ -191,6 +218,7 @@ public class Social {
         if((current.isEmpty() && tier==-1) || (!current.isEmpty() && current.getFirst().equals(tier)))return ranking(actor);
         if(tier>=0) {
             if(SEASON_ID.matcher(title).matches())fail(HttpStatus.BAD_REQUEST,"Temporadas não entram no ranking.");
+            if(episodic(title))fail(HttpStatus.BAD_REQUEST,"A categoria da série vem da média das temporadas.");
             if(!exists("select count(*) from library where actor=? and title=? and watched=true",actor,title))
                 fail(HttpStatus.BAD_REQUEST,"Marque a obra como assistida para colocá-la no ranking.");
             if(current.isEmpty() && db.queryForObject("select count(*) from film_ranking where actor=?",Integer.class,actor)>=100)
@@ -214,9 +242,11 @@ public class Social {
         active(actor);
         validateTitle(title);
         return db.queryForList("""
-            select season, avg(cast(rating as decimal(8,4)))/2 as average
+            select season,sum(rating) as total,count(*) as votes
             from episode_rating where actor=? and title=? group by season order by season
-            """,actor,title);
+            """,actor,title).stream().map(row->Map.<String,Object>of("season",row.get("season"),
+                "average",roundedEpisodeAverage(((Number)row.get("total")).longValue(),((Number)row.get("votes")).longValue())))
+            .toList();
     }
 
     @GetMapping("/me/episodes/{title}/{season}")
@@ -332,7 +362,15 @@ public class Social {
     private static Double roundedEpisodeAverage(long sum,long count) {
         if(count==0)return null;
         // As notas são inteiras de 1 a 10. No ponto médio, mantenha a meia estrela inferior.
-        return ((2*sum+count-1)/(2*count))/2.0;
+        return seasonHalfStars(sum,count)/2.0;
+    }
+
+    private static int seasonHalfStars(long sum,long count) {
+        return (int)((2*sum+count-1)/(2*count));
+    }
+
+    private static int seriesHalfStars(IntSummaryStatistics seasons) {
+        return (int)((seasons.getSum()+seasons.getCount()-1)/seasons.getCount());
     }
 
     private void saveEpisodeRating(String actor,String title,int season,int episode,Integer rating) {
@@ -452,8 +490,8 @@ public class Social {
         var params=new ArrayList<Object>();
         params.add(viewer);params.add(viewer);params.add(viewer);params.addAll(ids);
         return db.queryForList("select l.title,p.username,p.name,p.avatar,l.review,l.review_published_at,l.version,l.actor=? as own,"
-            +"case when l.title like 'tmdb-tv-%' then (select avg(s.season_score) from "
-            +"(select e.actor,e.title,e.season,avg(e.rating) as season_score from episode_rating e "
+            +"case when l.title like 'tmdb-tv-%' then (select ceil(avg(s.season_score)) from "
+            +"(select e.actor,e.title,e.season,floor((2.0*sum(e.rating)+count(*)-1)/(2.0*count(*))) as season_score from episode_rating e "
             +"join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode) "
             +"where ep.evaluation_public and not ep.hidden group by e.actor,e.title,e.season) s "
             +"where s.actor=l.actor and s.title=l.title) else l.rating end as rating,"
@@ -557,11 +595,11 @@ public class Social {
             }
             var seasons=bySeason.entrySet().stream().map(item->Map.<String,Object>of(
                 "season",item.getKey(),"average",roundedEpisodeAverage(item.getValue().getSum(),item.getValue().getCount()))).toList();
-            var average=bySeason.values().stream().mapToDouble(stats->stats.getAverage()/2).average();
+            var scores=bySeason.values().stream().mapToInt(stats->seasonHalfStars(stats.getSum(),stats.getCount())).summaryStatistics();
             result=new HashMap<>();
             result.put("rating_count",viewers.size());
             result.put("episode_rating_count",publicEpisodes.size());
-            result.put("average",average.isPresent()?average.getAsDouble():null);
+            result.put("average",scores.getCount()==0?null:seriesHalfStars(scores)/2.0);
             result.put("seasons",seasons);
         } else {
             result=new HashMap<>(db.queryForMap("""
@@ -907,7 +945,11 @@ public class Social {
                 item.remove("hidden");item.remove("evaluation_public");
             }
         }
-        var ranking=own||Boolean.TRUE.equals(visibility.get("ranking"))?db.queryForList("select title,tier from film_ranking where actor=? order by tier,position",actor):List.of();
+        var ranking=new ArrayList<Map<String,Object>>();
+        if(own||Boolean.TRUE.equals(visibility.get("ranking"))) {
+            ranking.addAll(manualRanking(actor));
+            ranking.addAll(seriesRanking(actor,!own));
+        }
         return Map.of("profile",Map.of("username",profile.get("username"),"name",profile.get("name"),"bio",profile.get("bio"),"avatar",Objects.toString(profile.get("avatar"),"")),"library",library,"viewings",diary.items(),"diaryHasMore",diary.hasMore(),"ranking",ranking,"visibility",visibility);
     }
 

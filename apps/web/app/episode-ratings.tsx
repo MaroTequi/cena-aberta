@@ -27,7 +27,7 @@ export function EpisodeRatings({title,season,allowRating,onSaved}:{title:string;
     return ()=>{current=false;};
   },[title,revision,retry]);
   const personalSeries=seasonAverages?.length
-    ?seasonAverages.reduce((sum,item)=>sum+item.average,0)/seasonAverages.length
+    ?Math.ceil(seasonAverages.reduce((sum,item)=>sum+2*item.average,0)/seasonAverages.length)/2
     :null;
   useEffect(()=>{
     let current=true;

@@ -4,7 +4,8 @@ import {useEffect,useRef,useState,type ReactNode} from "react";
 
 type Film={id:string;name:string;poster:string|null};
 type Ranked={title:string;tier:number};
-type Ranking={version:number;items:Ranked[]};
+type Automatic=Ranked&{average:number};
+type Ranking={version:number;items:Ranked[];automatic:Automatic[]};
 export const rankingCategories=["Obra-prima","Muito bom","Bom","Regular","Não gostei"];
 const dragType="application/x-cena-film";
 
@@ -26,9 +27,11 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
   useEffect(()=>{void load();},[]);
   const groupFilms=films.filter(film=>(film.anime?"anime":film.format)===kind);
   const available=new Map(groupFilms.map(film=>[film.id,film]));
-  const visible=items.filter(item=>available.has(item.title));
+  const automatic=(ranking?.automatic??[]).filter(item=>available.has(item.title));
+  const manual=items.filter(item=>available.has(item.title));
+  const visible=manual.concat(automatic);
   function move(id:string,tier:number,before?:string) {
-    if(saving.current||busy||!ranking||!available.has(id)||id===before)return;
+    if(saving.current||busy||!ranking||!available.has(id)||id===before||groupFilms.some(film=>film.id===id&&film.format==="tv"))return;
     const next=items.filter(item=>item.title!==id);
     if(tier>=0) {
       if(next.length>=100){setError("O ranking aceita até 100 obras.");return;}
@@ -54,7 +57,7 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
     if(saving.current||!ranking)return;
     const current=items.find(item=>item.title===id);
     if(!current)return;
-    const group=visible.filter(item=>item.tier===current.tier);
+    const group=manual.filter(item=>item.tier===current.tier);
     const index=group.findIndex(item=>item.title===id);
     const neighbor=group[index+direction];
     if(!neighbor)return;
@@ -65,10 +68,12 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
     setItems(next);setDirty(true);
     void save(next);
   }
-  function mini(film:Film,tier:number) {
-    const group=visible.filter(item=>item.tier===tier);
+  function mini(film:Film&{format?:string},tier:number) {
+    const group=manual.filter(item=>item.tier===tier);
     const position=group.findIndex(item=>item.title===film.id);
-    return <div className="rank-film" key={film.id} draggable={!busy&&!!ranking}
+    const series=film.format==="tv";
+    const score=automatic.find(item=>item.title===film.id);
+    return <div className="rank-film" key={film.id} draggable={!series&&!busy&&!!ranking}
       onDragStart={event=>{event.dataTransfer.setData(dragType,film.id);event.dataTransfer.effectAllowed="move";setDragging(film.id);}}
       onDragEnd={()=>setDragging("")}
       onDragOver={event=>{if(dragging){event.preventDefault();event.stopPropagation();}}}
@@ -76,6 +81,7 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
       <a href={workHref(film.id)} draggable={false} className="rank-poster" title={film.name}>
         {film.poster?<img src={film.poster} alt={film.name} draggable={false} loading="lazy"/>:<span>{film.name}</span>}
       </a>
+      {series?<small>{score?"★ "+score.average.toLocaleString("pt-BR")+" / 5":"Sem notas nos episódios"}</small>:<>
       <label className="sr-only" htmlFor={"rank-"+film.id}>Categoria de {film.name}</label>
       <select id={"rank-"+film.id} aria-label={"Categoria de "+film.name} value={tier} disabled={busy||!ranking} onChange={event=>move(film.id,Number(event.target.value))}>
         <option value={-1}>Sem categoria</option>{rankingCategories.map((name,index)=><option key={name} value={index}>{name}</option>)}
@@ -83,7 +89,7 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
       {tier>=0&&<div className="rank-order">
         <button type="button" disabled={busy||position<=0} aria-label={"Mover "+film.name+" para antes"} onClick={()=>reorder(film.id,-1)}>←</button>
         <button type="button" disabled={busy||position>=group.length-1} aria-label={"Mover "+film.name+" para depois"} onClick={()=>reorder(film.id,1)}>→</button>
-      </div>}
+      </div>}</>}
     </div>;
   }
   function drop(event:React.DragEvent,tier:number) {
@@ -95,13 +101,14 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
       {[["movie","Filmes"],["tv","Séries"],["anime","Animes"],["ep","Episódios"]].map(([id,label])=><button key={id} type="button"
         aria-pressed={kind===id} onClick={()=>setKind(id)}>{label}</button>)}
     </div>
-    <p className="muted">Arraste as obras assistidas para uma categoria. As posições são salvas automaticamente. No celular ou pelo teclado, use o seletor de cada card.</p>
+    <p className="muted">{kind==="tv"?"A média das temporadas define a categoria de cada série.":
+      "Arraste as obras assistidas para uma categoria ou use o seletor de cada card. Séries e animes episódicos usam a média das temporadas."}</p>
     {error&&<p role="alert" className="message error">{error} <button onClick={load} disabled={busy}>Recarregar ranking</button></p>}
     {message&&<p role="status" className="message">{message}</p>}
     {rankingCategories.map((name,tier)=><div key={name} className={"rank-tier rank-tier-"+tier}
       onDragOver={event=>{if(dragging)event.preventDefault();}} onDrop={event=>drop(event,tier)}>
       <h3>{name}</h3><div className="rank-cards">{visible.filter(item=>item.tier===tier).map(item=>mini(available.get(item.title)??{id:item.title,name:"Filme do ranking",poster:null},tier))}
-      {!visible.some(item=>item.tier===tier)&&<span className="muted">Arraste para cá</span>}</div>
+      {!visible.some(item=>item.tier===tier)&&<span className="muted">{kind==="tv"?"Nenhuma série nesta categoria":"Arraste para cá"}</span>}</div>
     </div>)}
     <div className="rank-bank" onDragOver={event=>{if(dragging)event.preventDefault();}} onDrop={event=>drop(event,-1)}>
       <h3>Sem categoria</h3><div className="rank-cards">{groupFilms.filter(film=>!visible.some(item=>item.title===film.id)).map(film=>mini(film,-1))}</div>
