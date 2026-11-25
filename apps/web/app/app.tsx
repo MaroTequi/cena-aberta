@@ -35,7 +35,7 @@ type Section = typeof profileSections[number];
 type Dashboard={visibility?:Record<Section,boolean>;ranking?:{title:string;tier:number}[];needsProfile?:boolean;profile?:Profile;library?:Entry[];diaryHasMore?:boolean;viewings?:Viewing[]};
 type Review={username:string;name:string;avatar?:string;rating:number|null;review:string;spoiler:boolean;version:number;my_vote:boolean|null};
 type RankedSeries={title:string;tier:number;average:number};
-type SeasonProgress={watched:number;total:number;average:number|null;rewatched:boolean};
+type SeasonProgress={watched:number;total:number;average:number|null;rewatched:boolean;complete:boolean};
 type SeasonAverage={season:number;average:number};
 type Community={seasons?:SeasonAverage[];average:number|null;rating_count:number;episode_rating_count?:number;reviews:Review[]};
 const demoEvaluations=[
@@ -394,7 +394,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       .catch(()=>{if(active)setSeriesComplete("unavailable");});
     return ()=>{active=false;};
   },[seriesId,data]);
-  const seasonComplete=seasonProgress?.rewatched&&!progressError;
+  const seasonComplete=seasonProgress?.complete&&!progressError;
   const seriesScore=rankedSeries.find(item=>item.title===title?.id);
   const entry=data?.library?.find(item=>item.title===title?.id)??empty;
   const current=other??data;

@@ -317,7 +317,7 @@ public class Social {
         }
     }
 
-    record SeasonProgress(int watched,int total,Double average,boolean rewatched) {}
+    record SeasonProgress(int watched,int total,Double average,boolean rewatched,boolean complete) {}
 
     @GetMapping("/me/season-progress/{series}/{season}")
     SeasonProgress seasonProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
@@ -333,36 +333,36 @@ public class Social {
         var seasons=catalogNumbers("/titles/"+series+"/seasons","number",0,1000);
         if(seasons.isEmpty())return Map.of("complete",false);
 
-        String seasonPrefix="season-"+series+"-s";
-        var repeatedSeasons=repeatedViewings(actor,seasonPrefix);
-        if(seasons.stream().allMatch(season->repeatedSeasons.contains(seasonPrefix+season)))
-            return Map.of("complete",true);
-
         String episodePrefix="ep-"+series+"-s";
-        var repeatedEpisodes=repeatedViewings(actor,episodePrefix);
+        var watchedAndRated=new HashSet<>(db.queryForList("""
+            select title from library where actor=? and watched=true and rating is not null and title like ?
+            """,String.class,actor,episodePrefix+"%"));
         var seasonPrefixes=seasons.stream().map(season->episodePrefix+season+"-e").toList();
-        if(seasonPrefixes.stream().anyMatch(prefix->repeatedEpisodes.stream().noneMatch(id->id.startsWith(prefix))))
+        if(seasonPrefixes.stream().anyMatch(prefix->watchedAndRated.stream().noneMatch(id->id.startsWith(prefix))))
             return Map.of("complete",false);
 
         return Map.of("complete",seasons.stream().allMatch(season->
-            allEpisodesRepeated(episodePrefix+season+"-e",seasonEpisodes(series,season),repeatedEpisodes)));
+            allEpisodesMatch(episodePrefix+season+"-e",seasonEpisodes(series,season),watchedAndRated)));
     }
 
     private SeasonProgress seasonProgress(String actor,String series,int season,Set<Integer> episodes) {
         String prefix="ep-"+series+"-s"+season+"-e";
         var watched=watchedEpisodes(actor,prefix);
         int count=(int)episodes.stream().filter(number->watched.contains(prefix+number)).count();
-        var ratings=db.queryForList("select rating from episode_rating where actor=? and title=? and season=?",Integer.class,actor,series,season);
-        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()),
-            seasonRewatched(actor,prefix,episodes));
+        var ratings=db.query("select episode,rating from episode_rating where actor=? and title=? and season=?",
+            (row,index)->Map.entry(row.getInt("episode"),row.getInt("rating")),actor,series,season);
+        var rated=ratings.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
+        boolean complete=!episodes.isEmpty()&&count==episodes.size()&&rated.containsAll(episodes);
+        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Map.Entry::getValue).sum(),ratings.size()),
+            seasonRewatched(actor,prefix,episodes),complete);
     }
 
     private boolean seasonRewatched(String actor,String prefix,Set<Integer> episodes) {
-        return allEpisodesRepeated(prefix,episodes,repeatedViewings(actor,prefix));
+        return allEpisodesMatch(prefix,episodes,repeatedViewings(actor,prefix));
     }
 
-    private static boolean allEpisodesRepeated(String prefix,Set<Integer> episodes,Set<String> repeated) {
-        return !episodes.isEmpty()&&episodes.stream().allMatch(number->repeated.contains(prefix+number));
+    private static boolean allEpisodesMatch(String prefix,Set<Integer> episodes,Set<String> eligible) {
+        return !episodes.isEmpty()&&episodes.stream().allMatch(number->eligible.contains(prefix+number));
     }
 
     private Set<String> repeatedViewings(String actor,String prefix) {
