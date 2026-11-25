@@ -6,16 +6,7 @@ import {EpisodeCard, type Episode} from "./episode-card";
 type SeasonAverage={season:number;average:number};
 const score=(value:number)=>value.toLocaleString("pt-BR",{maximumFractionDigits:2})+" / 5";
 
-function SeasonScore({label,value,community=false}:{label:string;value:number|undefined;community?:boolean}) {
-  return <div className={"season-score"+(community?" season-score-public":"")}>
-    <span className="season-score-label">{label}</span>
-    {value===undefined?<span className="season-score-empty">Sem notas</span>:<div className="season-score-value">
-      <span aria-hidden="true">★</span> <strong>{value.toLocaleString("pt-BR",{maximumFractionDigits:2})}</strong> <small>/ 5</small>
-    </div>}
-  </div>;
-}
-
-export function EpisodeRatings({title,season,allowRating}:{title:string;season:number;allowRating:boolean}) {
+export function EpisodeRatings({title,season,allowRating,onSaved}:{title:string;season:number;allowRating:boolean;onSaved:()=>void}) {
   const [episodes,setEpisodes]=useState<Episode[]>([]);
   const [ratings,setRatings]=useState<Record<number,number>>({});
   const [loading,setLoading]=useState(true);
@@ -35,17 +26,6 @@ export function EpisodeRatings({title,season,allowRating}:{title:string;season:n
       .catch(()=>{if(current)setAveragesFailed(true);});
     return ()=>{current=false;};
   },[title,revision,retry]);
-  const personalSeason=seasonAverages?.find(item=>item.season===season)?.average;
-  const [publicSeason,setPublicSeason]=useState<number|undefined>(undefined);
-  useEffect(()=>{
-    const controller=new AbortController();
-    setPublicSeason(undefined);
-    fetch("/api/v1/titles/"+title+"/community",{signal:controller.signal})
-      .then(response=>response.ok?response.json():null)
-      .then(result=>{if(!controller.signal.aborted)setPublicSeason(result?.seasons?.find((item:SeasonAverage)=>item.season===season)?.average);})
-      .catch(()=>{});
-    return ()=>controller.abort();
-  },[title,season,revision]);
   const personalSeries=seasonAverages?.length
     ?seasonAverages.reduce((sum,item)=>sum+item.average,0)/seasonAverages.length
     :null;
@@ -76,6 +56,7 @@ export function EpisodeRatings({title,season,allowRating}:{title:string;season:n
         return next;
       });
       setRevision(value=>value+1);
+      onSaved();
     }catch(e){setError(e instanceof Error?e.message:"Falha ao salvar.");}
     finally{setBusy(false);}
   }
@@ -83,10 +64,6 @@ export function EpisodeRatings({title,season,allowRating}:{title:string;season:n
     <h2 id="episodes-heading">Episódios</h2>
     {averagesFailed?<p role="alert">Não foi possível carregar suas médias. <button type="button" onClick={()=>setRevision(value=>value+1)}>Tentar novamente</button></p>
       :seasonAverages&&<p><strong>Minha média da série</strong> · {personalSeries===null?"Sem notas por episódio":score(personalSeries)}</p>}
-    <div className="episode-averages">
-      {!averagesFailed&&seasonAverages&&<SeasonScore label="Minha média dos episódios" value={personalSeason}/>}
-      <SeasonScore label="Média pública dos episódios" value={publicSeason} community/>
-    </div>
     {loading&&<p role="status">Carregando episódios…</p>}
     {error&&<p role="alert">{error} <button onClick={()=>setRetry(value=>value+1)} disabled={busy}>Tentar novamente</button></p>}
     {!loading&&!error&&!episodes.length&&<p>Nenhum episódio disponível.</p>}

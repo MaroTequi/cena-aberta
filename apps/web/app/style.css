@@ -132,12 +132,6 @@ button{cursor:pointer;color:inherit;background:var(--surface);border:1px solid v
 .rank-choices .rank-choice:hover,.rank-choices .rank-choice[aria-pressed=true]{background:var(--tier);color:var(--header)}
 .ranking-tabs{margin-bottom:12px}
 
-.episode-averages{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;max-width:560px;margin-block:14px}
-.season-score{--season-accent:var(--accent);display:grid;gap:6px;align-content:start;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--season-accent);border-radius:10px;background:var(--input)}
-.season-score-public{--season-accent:#a5dedb}
-.season-score-label{color:var(--muted);font-size:.875rem;font-weight:650}
-.season-score-value{color:var(--season-accent);font-size:1.5rem;line-height:1.2;font-variant-numeric:tabular-nums}
-.season-score-empty{color:var(--muted);line-height:1.8}
 
 .profile-ranking-link,.ranking-title{display:inline-flex;align-items:center;gap:.65rem}
 .profile-ranking-link{min-height:44px;padding:.6rem 1rem;background:linear-gradient(120deg,#382d22,#222634);border-color:#796141;color:var(--accent)}
@@ -416,3 +410,7 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 
 .work-back-links{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
 .work-back-links .room-nav-button svg{width:18px;height:18px}
+
+.season-watch-status{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-weight:650}
+.season-progress-summary{color:var(--muted);margin-block:12px}
+.season-progress-summary strong{color:var(--accent)}

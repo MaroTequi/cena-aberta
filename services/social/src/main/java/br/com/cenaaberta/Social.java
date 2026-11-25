@@ -155,6 +155,7 @@ public class Social {
 
                 fail(HttpStatus.BAD_REQUEST,"Ranking inválido.");
 
+            if(item.title()==null || SEASON_ID.matcher(item.title()).matches())fail(HttpStatus.BAD_REQUEST,"Temporadas não entram no ranking.");
             if(!exists("select count(*) from library where actor=? and title=? and watched=true",actor,item.title()))
 
                 fail(HttpStatus.BAD_REQUEST,"Adicione apenas obras marcadas como assistidas.");
@@ -189,6 +190,7 @@ public class Social {
         var current=db.queryForList("select tier from film_ranking where actor=? and title=?",Integer.class,actor,title);
         if((current.isEmpty() && tier==-1) || (!current.isEmpty() && current.getFirst().equals(tier)))return ranking(actor);
         if(tier>=0) {
+            if(SEASON_ID.matcher(title).matches())fail(HttpStatus.BAD_REQUEST,"Temporadas não entram no ranking.");
             if(!exists("select count(*) from library where actor=? and title=? and watched=true",actor,title))
                 fail(HttpStatus.BAD_REQUEST,"Marque a obra como assistida para colocá-la no ranking.");
             if(current.isEmpty() && db.queryForObject("select count(*) from film_ranking where actor=?",Integer.class,actor)>=100)
@@ -247,20 +249,34 @@ public class Social {
 
             fail(HttpStatus.BAD_REQUEST,"Episódio ou nota inválidos.");
 
+        if(!seasonEpisodes(title,season).contains(episode))fail(HttpStatus.NOT_FOUND,"Episódio não encontrado.");
+        String episodeId="ep-"+title+"-s"+season+"-e"+episode;
+        if(input.rating()!=null && !exists("select count(*) from library where actor=? and title=?",actor,episodeId)) {
+            createLibraryEntry(actor,episodeId,title);
+        }
+        db.update("update library set rating=? where actor=? and title=?",input.rating(),actor,episodeId);
+        if(input.rating()!=null)mark(actor,episodeId);
+        saveEpisodeRating(actor,title,season,episode,input.rating());
+    }
+
+    private Set<Integer> seasonEpisodes(String series,int season) {
+        validateTitle(series);
+        if(SEASON_ID.matcher(series).matches()||EPISODE_ID.matcher(series).matches()||season<0||season>1000)
+            fail(HttpStatus.BAD_REQUEST,"Temporada inválida.");
         try {
 
-            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/titles/"+title+"/seasons/"+season))
+            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/titles/"+series+"/seasons/"+season))
 
                 .timeout(Duration.ofSeconds(5)).header("X-Internal-Key",catalogKey).GET().build(),HttpResponse.BodyHandlers.ofString());
 
             if(response.statusCode()!=200)fail(response.statusCode()==404?HttpStatus.NOT_FOUND:HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível consultar os episódios.");
 
-            boolean found=false;
-
-            for(var item:mapper.readTree(response.body()))if(item.path("number").asInt()==episode)found=true;
-
-            if(!found)fail(HttpStatus.NOT_FOUND,"Episódio não encontrado.");
-
+            Set<Integer> episodes=new LinkedHashSet<>();
+            for(var item:mapper.readTree(response.body())) {
+                int number=item.path("number").asInt();
+                if(number>0&&number<=999999999)episodes.add(number);
+            }
+            return episodes;
         } catch(InterruptedException e) {
 
             Thread.currentThread().interrupt();
@@ -273,13 +289,50 @@ public class Social {
 
         }
 
-        String episodeId="ep-"+title+"-s"+season+"-e"+episode;
-        if(input.rating()!=null && !exists("select count(*) from library where actor=? and title=?",actor,episodeId)) {
-            createLibraryEntry(actor,episodeId,title);
+    }
+
+    record SeasonProgress(int watched,int total,Double average) {}
+
+    @GetMapping("/me/season-progress/{series}/{season}")
+    SeasonProgress seasonProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
+        active(actor);
+        return seasonProgress(actor,series,season,seasonEpisodes(series,season));
+    }
+
+    @PutMapping("/me/season-progress/{series}/{season}")
+    @Transactional
+    SeasonProgress completeSeason(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
+        var episodes=seasonEpisodes(series,season);
+        lockActive(actor);
+        String prefix="ep-"+series+"-s"+season+"-e";
+        var watched=watchedEpisodes(actor,prefix);
+        OffsetDateTime now=OffsetDateTime.now(DIARY_ZONE);
+        for(int episode:episodes) {
+            String id=prefix+episode;
+            if(watched.contains(id))continue;
+            if(!exists("select count(*) from library where actor=? and title=?",actor,id))createLibraryEntry(actor,id,series);
+            recordFirstViewing(actor,id,now);
         }
-        db.update("update library set rating=? where actor=? and title=?",input.rating(),actor,episodeId);
-        if(input.rating()!=null)mark(actor,episodeId);
-        saveEpisodeRating(actor,title,season,episode,input.rating());
+        syncSeasonWatched(actor,series,season);
+        return seasonProgress(actor,series,season,episodes);
+    }
+
+    private SeasonProgress seasonProgress(String actor,String series,int season,Set<Integer> episodes) {
+        String prefix="ep-"+series+"-s"+season+"-e";
+        var watched=watchedEpisodes(actor,prefix);
+        int count=(int)episodes.stream().filter(number->watched.contains(prefix+number)).count();
+        var ratings=db.queryForList("select rating from episode_rating where actor=? and title=? and season=?",Integer.class,actor,series,season);
+        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()));
+    }
+
+    private Set<String> watchedEpisodes(String actor,String prefix) {
+        return new HashSet<>(db.queryForList("select title from library where actor=? and watched=true and title like ?",String.class,actor,prefix+"%"));
+    }
+
+    private static Double roundedEpisodeAverage(long sum,long count) {
+        if(count==0)return null;
+        // As notas são inteiras de 1 a 10. No ponto médio, mantenha a meia estrela inferior.
+        return ((2*sum+count-1)/(2*count))/2.0;
     }
 
     private void saveEpisodeRating(String actor,String title,int season,int episode,Integer rating) {
@@ -373,7 +426,7 @@ public class Social {
         active(actor);
 
         validateTitle(id);
-        return publicReviews(actor,id,episodic(id));
+        return publicReviews(actor,id,episodic(id)||SEASON_ID.matcher(id).matches());
     }
 
     private static final String EFFECTIVE_SPOILER = """
@@ -469,9 +522,24 @@ public class Social {
     Map<String,Object> community(@RequestHeader("X-Actor") String actor,@PathVariable String id) {
         active(actor);
         validateTitle(id);
+        var seasonKey=SEASON_ID.matcher(id);
+        boolean season=seasonKey.matches();
         boolean series=episodic(id);
         Map<String,Object> result;
-        if(series) {
+        if(season) {
+            var totals=db.queryForMap("""
+                select count(distinct e.actor) as rating_count,count(*) as episode_rating_count,coalesce(sum(e.rating),0) as total
+                from episode_rating e
+                join library series on series.actor=e.actor and series.title=e.title
+                join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode)
+                join profile p on p.actor=e.actor
+                where e.title=? and e.season=? and series.evaluation_public and not series.hidden
+                    and ep.evaluation_public and not ep.hidden and p.active
+                """,seasonKey.group(1),Integer.parseInt(seasonKey.group(2)));
+            result=new HashMap<>(totals);
+            long sum=((Number)result.remove("total")).longValue();
+            result.put("average",roundedEpisodeAverage(sum,((Number)result.get("episode_rating_count")).longValue()));
+        } else if(series) {
             var publicEpisodes=db.queryForList("""
                 select e.actor,e.season,e.rating from episode_rating e
                 join library l on l.actor=e.actor and l.title=e.title
@@ -487,8 +555,8 @@ public class Social {
                 bySeason.computeIfAbsent((Integer)episode.get("season"),key->new IntSummaryStatistics())
                     .accept((Integer)episode.get("rating"));
             }
-            var seasons=bySeason.entrySet().stream().map(season->Map.<String,Object>of(
-                "season",season.getKey(),"average",season.getValue().getAverage()/2)).toList();
+            var seasons=bySeason.entrySet().stream().map(item->Map.<String,Object>of(
+                "season",item.getKey(),"average",roundedEpisodeAverage(item.getValue().getSum(),item.getValue().getCount()))).toList();
             var average=bySeason.values().stream().mapToDouble(stats->stats.getAverage()/2).average();
             result=new HashMap<>();
             result.put("rating_count",viewers.size());
@@ -502,7 +570,7 @@ public class Social {
                 where l.title=? and l.evaluation_public=true and l.hidden=false and p.active=true
                 """,id));
         }
-        result.put("reviews",publicReviews(actor,id,series));
+        result.put("reviews",publicReviews(actor,id,series||season));
         return result;
     }
 
@@ -514,6 +582,8 @@ public class Social {
 
         lockActive(actor);
 
+        if(SEASON_ID.matcher(id).matches()&&("watched".equals(action)||"rating".equals(action)))
+            fail(HttpStatus.BAD_REQUEST,"A nota e o progresso da temporada vêm dos episódios.");
         ensureLibrary(actor,id);
 
         var old=one("select * from library where actor=? and title=?",actor,id);
@@ -525,16 +595,14 @@ public class Social {
                 if (input.value()==null) fail(HttpStatus.BAD_REQUEST,"Informe o estado.");
 
                 if (input.value()) {
-                    mark(actor,id);
-                    if(!exists("select count(*) from viewing where actor=? and title=?",actor,id)){
-                        OffsetDateTime now=OffsetDateTime.now(DIARY_ZONE);
-                        insertViewing(actor,id,now.toLocalDate(),false,now);
-                    }
+                    recordFirstViewing(actor,id,OffsetDateTime.now(DIARY_ZONE));
+                    syncEpisodeSeason(actor,id);
                 }
 
                 else if (!input.value()) {
 
                     db.update("update library set watched=false,rewatching=false where actor=? and title=?",actor,id);
+                    syncEpisodeSeason(actor,id);
 
                     if(db.update("delete from film_ranking where actor=? and title=?",actor,id)>0)
 
@@ -895,7 +963,34 @@ public class Social {
 
 
 
-    private void mark(String actor,String id) { db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id); }
+    private void mark(String actor,String id) {
+        if(SEASON_ID.matcher(id).matches())return;
+        db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
+        syncEpisodeSeason(actor,id);
+    }
+
+    private void recordFirstViewing(String actor,String id,OffsetDateTime now) {
+        db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
+        if(!exists("select count(*) from viewing where actor=? and title=?",actor,id))
+            insertViewing(actor,id,now.toLocalDate(),false,now);
+    }
+
+    private void syncEpisodeSeason(String actor,String id) {
+        var key=EPISODE_ID.matcher(id);
+        if(key.matches())syncSeasonWatched(actor,key.group(1),Integer.parseInt(key.group(2)));
+    }
+
+    private void syncSeasonWatched(String actor,String series,int season) {
+        String id="season-"+series+"-s"+season;
+        boolean watched=exists("select count(*) from library where actor=? and watched=true and title like ?",
+            actor,"ep-"+series+"-s"+season+"-e%");
+        if(watched) {
+            if(!exists("select count(*) from library where actor=? and title=?",actor,id))createLibraryEntry(actor,id,series);
+            db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
+        } else {
+            db.update("update library set watched=false,rewatching=false where actor=? and title=?",actor,id);
+        }
+    }
 
     private void active(String actor) { validateActor(actor); checkActive(one("select active from profile where actor=?",actor)); }
 
