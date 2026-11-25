@@ -408,4 +408,6 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 
 .work-credits>summary>svg,.work-timeline>summary>svg{vertical-align:-.2em;width:1.15em;height:1.15em;margin-inline:4px 8px;color:var(--accent)}
 
-.series-episode-list{padding-inline-start:2.5rem}.series-episode-list li{padding:6px 0}.series-episode-list summary{color:var(--muted);cursor:pointer}
+.series-episode-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:12px;margin:12px 0;padding:0;list-style:none}
+.episode-card{display:grid;align-content:start;gap:10px;min-width:0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--input);overflow-wrap:anywhere}
+.episode-card summary{color:var(--muted);cursor:pointer}

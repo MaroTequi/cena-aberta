@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {StarRating} from "./star-rating";
 
-type Episode={number:number;name:string;summary:string};
+import {EpisodeCard, type Episode} from "./episode-card";
 type SeasonAverage={season:number;average:number};
 const score=(value:number)=>value.toLocaleString("pt-BR",{maximumFractionDigits:2})+" / 5";
 
@@ -87,10 +87,10 @@ export function EpisodeRatings({title,seasons,publicSeasons,onSaved}:{title:stri
     {loading&&<p role="status">Carregando episódios…</p>}
     {error&&<p role="alert">{error} <button onClick={()=>setRetry(value=>value+1)} disabled={busy}>Tentar novamente</button></p>}
     {!loading&&!error&&!episodes.length&&<p>Nenhum episódio disponível.</p>}
-    {episodes.map((episode,index)=><article className="record" key={episode.number}>
-      <h3>{episode.number}. {episode.name}</h3>
-      <StarRating value={ratings[episode.number]??null} disabled={busy||loading} onChange={value=>void rate(episode.number,value)}/>
-      {episode.summary&&<details><summary>Mostrar sinopse do episódio</summary><p>{episode.summary}</p></details>}
-    </article>)}
+    {episodes.length>0&&<ol className="series-episode-list">
+      {episodes.map(episode=><EpisodeCard key={episode.number} episode={episode}>
+        <StarRating value={ratings[episode.number]??null} disabled={busy||loading} onChange={value=>void rate(episode.number,value)}/>
+      </EpisodeCard>)}
+    </ol>}
   </section>;
 }

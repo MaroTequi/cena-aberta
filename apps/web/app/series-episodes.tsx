@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {UiIcon} from "./ui-icons";
 
-type Episode={number:number;name:string;summary:string};
+import {EpisodeCard, type Episode} from "./episode-card";
 type Season={episodes:Episode[]}|{failed:true};
 
 export function SeriesEpisodes({title,seasons}:{title:string;seasons:number}){
@@ -42,10 +42,7 @@ export function SeriesEpisodes({title,seasons}:{title:string;seasons:number}){
       return <section key={number}><h4>{number===0?"Especiais":"Temporada "+number}</h4>
         {!result?<p role="status">Carregando episódios…</p>:"failed" in result?<p role="status">Não foi possível carregar esta temporada.
           {" "}<button type="button" onClick={()=>setAttempt(value=>value+1)}>Tentar novamente</button></p>:
-          result.episodes.length?<ol className="series-episode-list">{result.episodes.map(ep=><li key={ep.number} value={ep.number}>
-            <strong>{ep.name||"Episódio "+ep.number}</strong>
-            {ep.summary&&<details><summary>Sinopse</summary><p>{ep.summary}</p></details>}
-          </li>)}</ol>:<p>Nenhum episódio disponível.</p>}
+          result.episodes.length?<ol className="series-episode-list">{result.episodes.map(ep=><EpisodeCard key={ep.number} episode={ep}/>)}</ol>:<p>Nenhum episódio disponível.</p>}
       </section>;
     })}
   </details>;
