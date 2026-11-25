@@ -35,7 +35,7 @@ type Section = typeof profileSections[number];
 type Dashboard={visibility?:Record<Section,boolean>;ranking?:{title:string;tier:number}[];needsProfile?:boolean;profile?:Profile;library?:Entry[];diaryHasMore?:boolean;viewings?:Viewing[]};
 type Review={username:string;name:string;avatar?:string;rating:number|null;review:string;spoiler:boolean;version:number;my_vote:boolean|null};
 type RankedSeries={title:string;tier:number;average:number};
-type SeasonProgress={watched:number;total:number;average:number|null};
+type SeasonProgress={watched:number;total:number;average:number|null;rewatched:boolean};
 type SeasonAverage={season:number;average:number};
 type Community={seasons?:SeasonAverage[];average:number|null;rating_count:number;episode_rating_count?:number;reviews:Review[]};
 const demoEvaluations=[
@@ -502,11 +502,17 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           </button>
         </div>:<IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>}
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}
-        {entry.watched&&<><IconAction kind="rewatching" active={entry.rewatching} disabled={busy} label={entry.rewatching?"Vi novamente":"Sem revisualização"} onClick={()=>{void update("rewatching",{value:!entry.rewatching});}}/>
-        <button disabled={busy||!entry.rewatching} aria-haspopup="dialog" title={!entry.rewatching?"Marque Vi novamente para registrar outra sessão.":undefined} onClick={()=>{
-          setError("");
-          setPendingViewing({title:title.id,name:title.name,watchedAt:new Date().toISOString()});
-        }}>Registrar sessão</button></>}</div>
+        {title.format==="seas"?<span className="season-watch-status" role="status" data-complete={!!seasonProgress?.rewatched}>
+          <Icon kind="rewatching" active={!!seasonProgress?.rewatched}/>
+          {seasonProgress?.rewatched?"Vi novamente":"Vi novamente após duas sessões de cada episódio"}
+        </span>:entry.watched&&<IconAction kind="rewatching" active={entry.rewatching} disabled={busy} label={entry.rewatching?"Vi novamente":"Sem revisualização"} onClick={()=>{void update("rewatching",{value:!entry.rewatching});}}/>}
+        {(entry.watched||seasonProgress?.rewatched)&&<button
+          disabled={busy||(title.format==="seas"?!seasonProgress?.rewatched:!entry.rewatching)}
+          aria-haspopup="dialog" onClick={()=>{
+            setError("");
+            setPendingViewing({title:title.id,name:title.name,watchedAt:new Date().toISOString()});
+          }}>Registrar sessão</button>}
+      </div>
       {title.format==="seas"&&<div className="season-progress-summary">
         {progressError?<p role="alert">{progressError} <button type="button" onClick={()=>setProgressRetry(value=>value+1)}>Tentar novamente</button></p>:
           seasonProgress?<p role="status">{seasonProgress.watched} de {seasonProgress.total} episódios vistos

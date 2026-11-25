@@ -6,5 +6,7 @@ import {FriendsPanel} from "./friends";
 export const dynamic="force-dynamic";
 export default async function Page(){
  const session=await getServerSession(authOptions) as {actor?:string}|null;
- if(!session?.actor)redirect("/conta");await requireProfile(session.actor,"/amigos");return <FriendsPanel/>;
+ if(!session?.actor)redirect("/conta");
+ const profile=await requireProfile(session.actor,"/amigos");
+ return <FriendsPanel profile={profile}/>;
 }

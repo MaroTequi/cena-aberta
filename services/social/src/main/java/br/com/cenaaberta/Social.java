@@ -321,7 +321,7 @@ public class Social {
 
     }
 
-    record SeasonProgress(int watched,int total,Double average) {}
+    record SeasonProgress(int watched,int total,Double average,boolean rewatched) {}
 
     @GetMapping("/me/season-progress/{series}/{season}")
     SeasonProgress seasonProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
@@ -352,7 +352,17 @@ public class Social {
         var watched=watchedEpisodes(actor,prefix);
         int count=(int)episodes.stream().filter(number->watched.contains(prefix+number)).count();
         var ratings=db.queryForList("select rating from episode_rating where actor=? and title=? and season=?",Integer.class,actor,series,season);
-        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()));
+        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()),
+            seasonRewatched(actor,prefix,episodes));
+    }
+
+    private boolean seasonRewatched(String actor,String prefix,Set<Integer> episodes) {
+        if(episodes.isEmpty())return false;
+        var repeated=new HashSet<>(db.queryForList("""
+            select title from viewing where actor=? and title like ?
+            group by title having count(*)>=2
+            """,String.class,actor,prefix+"%"));
+        return episodes.stream().allMatch(number->repeated.contains(prefix+number));
     }
 
     private Set<String> watchedEpisodes(String actor,String prefix) {
@@ -620,7 +630,7 @@ public class Social {
 
         lockActive(actor);
 
-        if(SEASON_ID.matcher(id).matches()&&("watched".equals(action)||"rating".equals(action)))
+        if(SEASON_ID.matcher(id).matches()&&Set.of("watched","rating","rewatching").contains(action))
             fail(HttpStatus.BAD_REQUEST,"A nota e o progresso da temporada vêm dos episódios.");
         ensureLibrary(actor,id);
 
@@ -753,9 +763,17 @@ public class Social {
 
         ensureLibrary(actor,input.title());
 
-        if (!input.rewatch() || !exists("select count(*) from library where actor=? and title=? and rewatching=true",actor,input.title()))
-
-            fail(HttpStatus.CONFLICT,"Marque Vi novamente para registrar outra sessão.");
+        var seasonKey=SEASON_ID.matcher(input.title());
+        boolean canRewatch;
+        if(seasonKey.matches()) {
+            String series=seasonKey.group(1);
+            int season=Integer.parseInt(seasonKey.group(2));
+            canRewatch=seasonRewatched(actor,"ep-"+series+"-s"+season+"-e",seasonEpisodes(series,season));
+        } else {
+            canRewatch=exists("select count(*) from library where actor=? and title=? and rewatching=true",actor,input.title());
+        }
+        if(!input.rewatch()||!canRewatch)
+            fail(HttpStatus.CONFLICT,seasonKey.matches()?"Registre duas sessões de cada episódio primeiro.":"Marque Vi novamente para registrar outra sessão.");
 
         String id=insertViewing(actor,input.title(),date,true,input.watchedAt());
 

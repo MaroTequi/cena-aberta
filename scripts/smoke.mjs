@@ -640,7 +640,7 @@ try {
   const seasonLibrary="me/library/"+seasonId+"/";
   const seasonWatched=async()=>Boolean((await episodeApi("me?title="+seasonId)).library[0]?.watched);
   const putSeason=async(path,body)=>fetch(web+"/api/v1/"+path,{method:"PUT",headers:finalHeaders,body:JSON.stringify(body)});
-  assert.deepEqual(await episodeApi(progressPath),{watched:0,total:2,average:null});
+  assert.deepEqual(await episodeApi(progressPath),{watched:0,total:2,average:null,rewatched:false});
   assert.equal((await putSeason(seasonLibrary+"watched",{value:true})).status,400);
   assert.equal((await putSeason(seasonLibrary+"rating",{rating:6})).status,400);
   await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:true});
@@ -649,15 +649,33 @@ try {
   assert.equal((await putSeason("me/ranking/"+seasonId,{tier:2})).status,400);
   await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:false});
   assert.equal(await seasonWatched(),false);
-  assert.deepEqual(await episodeApi(progressPath,"PUT",{}),{watched:2,total:2,average:null});
+  assert.deepEqual(await episodeApi(progressPath,"PUT",{}),{watched:2,total:2,average:null,rewatched:false});
   const otherEpisode="ep-demo-mare-alta-s1-e2";
   const secondDiary="diary?page=1&title="+otherEpisode;
   assert.equal((await episodeApi(secondDiary)).items.length,1);
-  assert.deepEqual(await episodeApi(progressPath,"PUT",{}),{watched:2,total:2,average:null});
+  assert.deepEqual(await episodeApi(progressPath,"PUT",{}),{watched:2,total:2,average:null,rewatched:false});
   assert.equal((await episodeApi(secondDiary)).items.length,1);
+  assert.equal((await putSeason(seasonLibrary+"rewatching",{value:true})).status,400);
+  const registerRewatch=async(id,expected=200)=>{
+    const result=await fetch(web+"/api/v1/me/viewings",{method:"POST",
+      headers:{...finalHeaders,"Idempotency-Key":randomUUID()},body:JSON.stringify({title:id,rewatch:true,date:"2024-01-01"})});
+    assert.equal(result.status,expected);
+    return result.json();
+  };
+  await registerRewatch(seasonId,409);
+  await episodeApi("me/library/"+episodeId+"/rewatching","PUT",{value:true});
+  await registerRewatch(episodeId);
+  assert.equal((await episodeApi(progressPath)).rewatched,false);
+  await episodeApi("me/library/"+otherEpisode+"/rewatching","PUT",{value:true});
+  const secondRewatch=await registerRewatch(otherEpisode);
+  assert.equal((await episodeApi(progressPath)).rewatched,true);
+  await registerRewatch(seasonId);
+  const deletion=await fetch(web+"/api/v1/me/viewings/"+secondRewatch.id,{method:"DELETE",headers:finalHeaders});
+  assert.equal(deletion.status,200);
+  assert.equal((await episodeApi(progressPath)).rewatched,false);
   await episodeApi("me/library/"+episodeId+"/rating","PUT",{rating:5});
   await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:6});
-  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5});
+  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5,rewatched:false});
   assert.equal((await episodeApi("titles/"+seasonId+"/community")).average,3.5);
   await episodeApi(seasonLibrary+"review","PUT",{review:"Resenha da temporada.",version:0,spoiler:false});
   assert.equal((await episodeApi("titles/"+seasonId+"/community")).reviews[0].review,"Resenha da temporada.");

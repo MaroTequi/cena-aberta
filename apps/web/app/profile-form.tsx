@@ -6,11 +6,13 @@ export type Profile={username:string;name:string;bio:string;avatar?:string};
 export type ProfileInput={username:string;name:string;bio:string;avatar?:string};
 
 
-export function ProfileAvatar({name,avatar}:{name:string;avatar?:string}) {
+export function ProfileAvatar({name,avatar}:{name:string;avatar?:string|null}) {
+  const [failedImage,setFailedImage]=useState<string|null>(null);
   const preset=avatarPresets.find(option=>avatar==="preset:"+option.id);
-  if(preset)return <img className="profile-avatar" src={"/avatars/"+preset.id+".svg"} alt=""/>;
-  return avatar?.startsWith("data:image/jpeg;base64,") ? <img className="profile-avatar" src={avatar} alt=""/> :
-    <span className="profile-avatar profile-initial" aria-hidden="true">{Array.from(name.trim())[0]?.toLocaleUpperCase("pt-BR")??"?"}</span>;
+  const image=preset?"/avatars/"+preset.id+".svg":avatar?.startsWith("data:image/jpeg;base64,")?avatar:null;
+  if(image&&image!==failedImage)
+    return <img className="profile-avatar" src={image} alt="" onError={()=>setFailedImage(image)}/>;
+  return <span className="profile-avatar profile-initial" aria-hidden="true">{Array.from(name.trim())[0]?.toLocaleUpperCase("pt-BR")??"?"}</span>;
 }
 
 export function ProfileForm({profile,busy,onSave}:{profile?:Profile;busy:boolean;onSave:(input:ProfileInput)=>void}) {
