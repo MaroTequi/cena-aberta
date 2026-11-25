@@ -87,8 +87,8 @@ export function EpisodeRatings({title,seasons,publicSeasons,onSaved}:{title:stri
     {loading&&<p role="status">Carregando episódios…</p>}
     {error&&<p role="alert">{error} <button onClick={()=>setRetry(value=>value+1)} disabled={busy}>Tentar novamente</button></p>}
     {!loading&&!error&&!episodes.length&&<p>Nenhum episódio disponível.</p>}
-    {episodes.length>0&&<ol className="series-episode-list">
-      {episodes.map(episode=><EpisodeCard key={episode.number} episode={episode}>
+    {episodes.length>0&&<ol className="grid series-episode-list episode-rating-grid">
+      {episodes.map(episode=><EpisodeCard key={episode.number} title={title} season={season} episode={episode}>
         <StarRating value={ratings[episode.number]??null} disabled={busy||loading} onChange={value=>void rate(episode.number,value)}/>
       </EpisodeCard>)}
     </ol>}

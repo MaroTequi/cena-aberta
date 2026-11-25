@@ -42,7 +42,7 @@ export function SeriesEpisodes({title,seasons}:{title:string;seasons:number}){
       return <section key={number}><h4>{number===0?"Especiais":"Temporada "+number}</h4>
         {!result?<p role="status">Carregando episódios…</p>:"failed" in result?<p role="status">Não foi possível carregar esta temporada.
           {" "}<button type="button" onClick={()=>setAttempt(value=>value+1)}>Tentar novamente</button></p>:
-          result.episodes.length?<ol className="series-episode-list">{result.episodes.map(ep=><EpisodeCard key={ep.number} episode={ep}/>)}</ol>:<p>Nenhum episódio disponível.</p>}
+          result.episodes.length?<ol className="grid series-episode-list">{result.episodes.map(ep=><EpisodeCard key={ep.number} title={title} season={number} episode={ep}/>)}</ol>:<p>Nenhum episódio disponível.</p>}
       </section>;
     })}
   </details>;

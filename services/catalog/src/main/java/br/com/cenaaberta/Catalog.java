@@ -78,7 +78,11 @@ public class Catalog {
     public record Person(long id,String name,String photo,String biography,String birthday,String deathday,String birthplace,List<WorkCredit> works) {}
 
     private static String posterUrl(JsonNode item,String size){
-        String path=item.path("poster_path").asText("");
+        return imageUrl(item,"poster_path",size);
+    }
+
+    private static String imageUrl(JsonNode item,String field,String size){
+        String path=item.path(field).asText("");
         return path.matches("/[A-Za-z0-9._-]+")?"https://image.tmdb.org/t/p/"+size+path:null;
     }
 
@@ -349,9 +353,11 @@ public class Catalog {
 
 
 
+    public record Episode(int number,String name,String summary,String still) {}
+
     @GetMapping("/titles/{id}/seasons/{season}")
 
-    List<Map<String,Object>> episodes(@PathVariable String id,@PathVariable int season) {
+    List<Episode> episodes(@PathVariable String id,@PathVariable int season) {
 
         if(season<0 || season>1000 || !"tv".equals(detail(id).format()))
 
@@ -360,24 +366,21 @@ public class Catalog {
         if(id.startsWith("demo-")) {
 
             if(season==2 && id.equals("demo-mare-alta"))
-                return List.of(Map.of("number",1,"name","O retorno","summary","Episódio ilustrativo."));
+                return List.of(new Episode(1,"O retorno","Episódio ilustrativo.",null));
             if(season!=1)throw new ResponseStatusException(HttpStatus.NOT_FOUND);
 
             return List.of(
-                Map.of("number",1,"name","Piloto","summary","Episódio ilustrativo."),
-                Map.of("number",2,"name","Segundo episódio","summary","Episódio ilustrativo."));
+                new Episode(1,"Piloto","Episódio ilustrativo.",null),
+                new Episode(2,"Segundo episódio","Episódio ilustrativo.",null));
 
         }
 
         JsonNode data=remote("/tv/"+id.substring("tmdb-tv-".length())+"/season/"+season);
 
-        List<Map<String,Object>> result=new ArrayList<>();
-
+        List<Episode> result=new ArrayList<>();
         for(JsonNode episode:data.path("episodes"))
-
-            result.add(Map.of("number",episode.path("episode_number").asInt(),
-
-                "name",episode.path("name").asText(),"summary",episode.path("overview").asText()));
+            result.add(new Episode(episode.path("episode_number").asInt(),text(episode,"name"),
+                text(episode,"overview"),imageUrl(episode,"still_path","w780")));
 
         return result;
 
