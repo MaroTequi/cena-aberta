@@ -394,7 +394,8 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       .catch(()=>{if(active)setSeriesComplete("unavailable");});
     return ()=>{active=false;};
   },[seriesId,data]);
-  const seasonComplete=seasonProgress?.rewatched&&!progressError;
+  const completion=title?.format==="tv"&&typeof seriesComplete==="boolean"?seriesComplete:
+    title?.format==="seas"&&seasonProgress&&!progressError?seasonProgress.rewatched:null;
   const seriesScore=rankedSeries.find(item=>item.title===title?.id);
   const entry=data?.library?.find(item=>item.title===title?.id)??empty;
   const current=other??data;
@@ -494,8 +495,10 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       </>}
       {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading work-detail-heading">
         <h2>Detalhes</h2>
-        {((title.format==="tv"&&seriesComplete===true)||(title.format==="seas"&&seasonComplete))&&
-          <span className="work-completion-badge" role="status"><Icon kind="watched" active/>Vi completamente</span>}
+        {completion!==null&&<span className="work-completion-badge" role="status" data-complete={completion}>
+          <Icon kind="watched" active={completion}/>
+          {completion?"Vi completamente":"Vi completamente · pendente"}
+        </span>}
       </div>
       {seriesPart&&<nav className="work-back-links" aria-label="Navegação da série">
         <Link className="room-nav-button" href={workHref(seriesPart.seriesId)}>
