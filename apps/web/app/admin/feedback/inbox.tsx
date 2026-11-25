@@ -1,5 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
+import {ReviewReports} from "./review-reports";
 import {AdminBackup} from "./backup";
 import {ProfileAvatar} from "../../profile-form";
 type Item={images:string[];thanks:string;attempts:number;queued_at:string|null;claim:string|null;id:string;kind:string;description:string;page:string;app_version:string;status:string;created:string;name:string;username:string;avatar:string};
@@ -31,5 +32,5 @@ export function FeedbackInbox(){
  {item.thanks!=="none"&&<section aria-label="Agradecimento"><p>{({sent:"Agradecimento aceito pelo provedor.",pending:"Agradecimento na fila.",sending:"Enviando agradecimento…",skipped:"Autor sem e-mail disponível.",uncertain:"Envio incerto. Confira o histórico no provedor antes de decidir."} as Record<string,string>)[item.thanks]}</p>
  <small>Tentativas: {item.attempts}{item.queued_at&&" · Na fila desde "+new Date(item.queued_at).toLocaleString("pt-BR")}</small>
  {item.thanks==="uncertain"&&<div className="row"><button disabled={busy} onClick={()=>void reconcile(item,"sent")}>Confirmar aceite</button><button disabled={busy} onClick={()=>void reconcile(item,"retry")}>Agendar reenvio</button></div>}</section>}<p className="muted"><small>{new Date(item.created).toLocaleString("pt-BR")} · {item.page} · v{item.app_version}</small></p><label>Status <select aria-label={"Status do relato de "+item.name} disabled={busy} value={item.status} onChange={e=>void change(item.id,e.target.value)}>{Object.entries(labels).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label></article>)}
- <div className="row"><button disabled={busy||loading||offset===0} onClick={()=>setOffset(n=>n-50)}>Anterior</button><span>Página {offset/50+1}</span><button disabled={busy||loading||!more} onClick={()=>setOffset(n=>n+50)}>Próxima</button></div><AdminBackup/></main>;
+ <div className="row"><button disabled={busy||loading||offset===0} onClick={()=>setOffset(n=>n-50)}>Anterior</button><span>Página {offset/50+1}</span><button disabled={busy||loading||!more} onClick={()=>setOffset(n=>n+50)}>Próxima</button></div><ReviewReports/><AdminBackup/></main>;
 }

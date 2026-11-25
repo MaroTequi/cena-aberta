@@ -655,6 +655,16 @@ try {
   const ballot=(user,containsSpoiler,expected=200)=>request(social,"/titles/"+title+"/spoiler-vote",
     {method:"PUT",user,expected,body:{username:authorName,version:published.version,containsSpoiler}});
   await ballot(reviewAuthor,true,403);
+  const reportPath="/titles/"+title+"/review-report";
+  const reportBody={username:authorName,version:published.version,reason:"spam",details:""};
+  await request(social,reportPath,{method:"POST",user:reviewAuthor,body:reportBody,expected:403});
+  await request(social,reportPath,{method:"POST",body:{...reportBody,reason:"other"},expected:400});
+  const report=await fetch(web+"/api/v1"+reportPath,{method:"POST",headers:finalHeaders,body:JSON.stringify(reportBody)});
+  assert.equal(report.status,200);
+  assert.deepEqual(await report.json(),{reported:true});
+  assert.deepEqual(await request(social,reportPath,{method:"POST",user:"demo_second_user",body:reportBody}),{reported:true});
+  assert.deepEqual(await request(social,reportPath,{method:"POST",user:"demo_second_user",body:reportBody}),{reported:true});
+  assert.equal((await fetch(web+"/api/v1/feedback/review-reports",{headers:finalHeaders})).status,403);
   assert.equal((await ballot(actor,true)).spoiler,false);
   assert.equal((await ballot(actor,true)).spoiler,false);
   assert.equal((await ballot("demo_second_user",true)).spoiler,true);
@@ -665,6 +675,7 @@ try {
   assert.equal((await ballot("demo_second_user",false)).spoiler,false);
   await request(social,reviewUrl,{user:reviewAuthor,method:"PUT",body:{version:published.version,review:"Texto atualizado",spoiler:false}});
   await ballot(actor,true,409);
+  await request(social,reportPath,{method:"POST",body:reportBody,expected:409});
   const revised=(await request(social,communityPath)).reviews.find(r=>r.username===authorName);
   assert.equal(revised.my_vote,null);assert.equal(revised.spoiler,false);
   await request(social,"/me/library/"+title+"/visibility",{user:reviewAuthor,method:"PUT",body:{value:false}});

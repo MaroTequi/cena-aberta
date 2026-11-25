@@ -19,6 +19,7 @@ import {UiIcon} from "./ui-icons";
 import {StarRating} from "./star-rating";
 import {ProfileFriends} from "./profile-friends";
 import {ProfileFriend} from "./profile-friend";
+import {ReviewReport} from "./review-report";
 import {ReviewEditor} from "./review-editor";
 import {IconAction} from "./action-icons";
 import {ProfileAvatar,ProfileForm,type Profile,type ProfileInput} from "./profile-form";
@@ -203,7 +204,8 @@ function ReviewReader({name,titleId,author,own,watched,text,version,initial}:{
     </div>}
     {error&&<p className="message error" role="alert">{error}</p>}
   </>;
-  if(!name)return <>{votes}{review}</>;
+  const report=!own&&<ReviewReport title={titleId} username={author} version={version}/>;
+  if(!name)return <>{votes}{review}{report}</>;
   return <>
     <button type="button" aria-haspopup="dialog" aria-label={"Abrir resenha de "+name} title="Abrir resenha" onClick={()=>{
       setReading(true);
@@ -211,7 +213,7 @@ function ReviewReader({name,titleId,author,own,watched,text,version,initial}:{
     }}><UiIcon name="review"/></button>
     <dialog ref={dialog} className="session-dialog profile-review-dialog" aria-label={"Resenha de "+name} onClose={()=>setReading(false)}>
       <h2>Resenha de {name}</h2>
-      {reading&&<>{review}{votes}</>}
+      {reading&&<>{review}{votes}{report}</>}
       <form method="dialog" className="row"><button>Fechar</button></form>
     </dialog>
   </>;

@@ -397,8 +397,8 @@ public class Social {
         if(ids.isEmpty()) return List.of();
         if(ids.size()>40) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var params=new ArrayList<Object>();
-        params.add(viewer);params.add(viewer);params.addAll(ids);
-        return db.queryForList("select l.title,p.username,p.name,p.avatar,l.review,l.review_published_at,"
+        params.add(viewer);params.add(viewer);params.add(viewer);params.addAll(ids);
+        return db.queryForList("select l.title,p.username,p.name,p.avatar,l.review,l.review_published_at,l.version,l.actor=? as own,"
             +"case when l.title like 'tmdb-tv-%' then (select avg(s.season_score) from "
             +"(select e.actor,e.title,e.season,avg(e.rating) as season_score from episode_rating e "
             +"join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode) "
@@ -430,6 +430,35 @@ public class Social {
         if(db.update("update review_spoiler_vote set contains_spoiler=? where author=? and title=? and voter=?",input.containsSpoiler(),author,id,actor)==0)
             db.update("insert into review_spoiler_vote(author,title,voter,contains_spoiler) values(?,?,?,?)",author,id,actor,input.containsSpoiler());
         return one("select "+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote from library l where l.actor=? and l.title=?",actor,author,id);
+    }
+
+    private static final Set<String> REPORT_REASONS=Set.of("spoiler","harassment","hate","spam","inappropriate","off_topic","other");
+
+    record ReviewReport(String username,Integer version,String reason,String details) {}
+
+    @PostMapping("/titles/{id}/review-report") @Transactional
+    Map<String,Boolean> reportReview(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody ReviewReport input) {
+        active(actor);
+        validateTitle(id);
+        String details=optional(input.details(),500);
+        if(input.version()==null||input.version()<0||input.reason()==null||!REPORT_REASONS.contains(input.reason())
+            || ("other".equals(input.reason())&&details.isBlank()))
+            fail(HttpStatus.BAD_REQUEST,"Escolha um motivo e descreva o problema ao selecionar Outro.");
+        String author=(String)one("select actor from profile where username=? and active=true",ProfileFields.username(input.username())).get("actor");
+        if(author.equals(actor))fail(HttpStatus.FORBIDDEN,"Você só pode reportar resenhas de outras pessoas.");
+        db.queryForList("select actor from profile where actor in (?,?) order by actor for update",actor,author);
+        active(actor);
+        active(author);
+        if(exists("select count(*) from review_report where reporter=? and author=? and title=? and review_version=?",actor,author,id,input.version()))
+            return Map.of("reported",true);
+        var review=one("select version,review from library where actor=? and title=? and review is not null and evaluation_public and not hidden for update",author,id);
+        if(!input.version().equals(review.get("version")))
+            fail(HttpStatus.CONFLICT,"A resenha mudou. Atualize a página antes de reportar.");
+        if(db.queryForObject("select count(*) from review_report where reporter=? and created>?",Integer.class,actor,OffsetDateTime.now().minusDays(1))>=10)
+            fail(HttpStatus.TOO_MANY_REQUESTS,"Limite de 10 denúncias por dia.");
+        db.update("insert into review_report(id,reporter,author,title,review_version,review_text,reason,details) values(?,?,?,?,?,?,?,?)",
+            UUID.randomUUID().toString(),actor,author,id,input.version(),review.get("review"),input.reason(),details);
+        return Map.of("reported",true);
     }
 
     private boolean episodic(String id) {

@@ -11,7 +11,7 @@ class FeedbackTest {
  JdbcTemplate db;Feedback service;
  @BeforeEach void setup(){
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
- new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V13__feedback_admin.sql"),new ClassPathResource("db/migration/V2__email_accounts.sql"),new ClassPathResource("db/migration/V20__account_state.sql"),new ClassPathResource("db/migration/V21__feedback_images.sql"),new ClassPathResource("db/migration/V24__feedback_thanks_claim.sql")).execute(source);
+ new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V13__feedback_admin.sql"),new ClassPathResource("db/migration/V2__email_accounts.sql"),new ClassPathResource("db/migration/V20__account_state.sql"),new ClassPathResource("db/migration/V21__feedback_images.sql"),new ClassPathResource("db/migration/V24__feedback_thanks_claim.sql"),new ClassPathResource("db/migration/V29__review_reports.sql")).execute(source);
  db=new JdbcTemplate(source);for(String a:List.of("admin","member"))db.update("insert into profile(actor,username,name) values(?,?,?)",a,a,a);
  db.update("insert into app_admin(actor) values('admin')");service=new Feedback(db,"secret");
  }
@@ -22,6 +22,20 @@ class FeedbackTest {
       and lower(sql_statement) not like '%information_schema%'
       """,Integer.class);
  }
+ @Test void reviewReportsCanBeResolvedAndReopenedByAdmins(){
+  String id=UUID.randomUUID().toString();
+  db.update("insert into review_report(id,reporter,author,title,review_version,review_text,reason,details) values(?,?,?,?,?,?,?,?)",
+      id,"member","admin","demo-mare-alta",1,"Resenha denunciada","spoiler","");
+  assertThrows(ResponseStatusException.class,()->service.reviewReports("member",false,0));
+  assertThrows(ResponseStatusException.class,()->service.resolveReviewReport("member",id,new Feedback.ReportResolution(true)));
+  assertEquals(1,((List<?>)service.reviewReports("admin",false,0).get("items")).size());
+  assertTrue(service.resolveReviewReport("admin",id,new Feedback.ReportResolution(true)).get("resolved"));
+  assertEquals(List.of(),service.reviewReports("admin",false,0).get("items"));
+  assertEquals(1,((List<?>)service.reviewReports("admin",true,0).get("items")).size());
+  assertFalse(service.resolveReviewReport("admin",id,new Feedback.ReportResolution(false)).get("resolved"));
+  assertEquals(1,((List<?>)service.reviewReports("admin",false,0).get("items")).size());
+ }
+
  @Test void inboxReadsTwoQueriesForOneOrFiftyReports(){
   db.execute("SET QUERY_STATISTICS TRUE");
   var date=java.time.OffsetDateTime.now();

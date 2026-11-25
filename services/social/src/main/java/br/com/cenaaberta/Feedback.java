@@ -27,6 +27,31 @@ public class Feedback {
  boolean admin(String actor){return db.queryForObject("select count(*) from app_admin where actor=?",Integer.class,actor)==1;}
  void requireAdmin(String actor){if(!admin(actor))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Acesso exclusivo de administradores.");}
  @GetMapping("/access") Map<String,Boolean> access(@RequestHeader("X-Actor") String actor){return Map.of("admin",admin(actor));}
+ record ReportResolution(Boolean resolved){}
+
+ @GetMapping("/review-reports")
+ Map<String,Object> reviewReports(@RequestHeader("X-Actor") String actor,@RequestParam(defaultValue="false") boolean resolved,
+     @RequestParam(defaultValue="0") int offset) {
+  requireAdmin(actor);
+  if(offset<0 || offset>100000)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+  var reports=db.queryForList("""
+      select r.id,r.title,r.review_version,r.review_text,r.reason,r.details,r.created,
+             a.username as author,p.username as reporter
+      from review_report r join profile a on r.author=a.actor join profile p on r.reporter=p.actor
+      where r.resolved=? order by r.created desc,r.id limit 51 offset ?
+      """,resolved,offset);
+  return Map.of("items",reports.subList(0,Math.min(50,reports.size())),"hasMore",reports.size()>50);
+ }
+
+ @PutMapping("/review-reports/{id}")
+ Map<String,Boolean> resolveReviewReport(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody ReportResolution input) {
+  requireAdmin(actor);
+  if(input.resolved()==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+  if(db.update("update review_report set resolved=? where id=?",input.resolved(),id)==0)
+   throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+  return Map.of("resolved",input.resolved());
+ }
+
  @PostMapping @Transactional Map<String,String> submit(@RequestHeader("X-Actor") String actor,@RequestBody Submission input){
   if(input.id()==null||!input.id().matches("[a-f0-9-]{36}")||input.kind()==null||!Set.of("bug","suggestion").contains(input.kind())||input.description()==null||input.description().strip().length()<10||input.description().length()>3000||input.page()==null||input.page().length()>250||!input.page().startsWith("/")||input.page().contains("?")||input.page().contains("#")||input.version()==null||!input.version().matches("[a-zA-Z0-9._+\\-]{1,80}"))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Informe uma descrição de 10 a 3000 caracteres.");
   db.queryForList("select actor from profile where actor=? for update",actor);

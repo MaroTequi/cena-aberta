@@ -1,9 +1,10 @@
 import "server-only";
+import {ReviewReport} from "./review-report";
 import {Poster} from "./poster";
 import {ProfileAvatar} from "./profile-form";
 
 type Release = {id:string; name:string; released:string; poster:string|null};
-type Review = {title:string; username:string; avatar?:string; name:string; rating:number|null; review:string; spoiler:boolean; review_published_at:string|null};
+type Review = {title:string; own:boolean; version:number; username:string; avatar?:string; name:string; rating:number|null; review:string; spoiler:boolean; review_published_at:string|null};
 type Entry = Review & {work:Release};
 
 async function internal<T>(service:"social"|"catalog", path:string, ids?:string[], viewer?:string):Promise<T> {
@@ -60,6 +61,7 @@ export async function MonthlyReviews({viewer}:{viewer?:string}){
           {item.rating!=null&&<ReviewStars rating={item.rating}/>}{item.review_published_at&&<> · <time dateTime={item.review_published_at}>{reviewDate.format(new Date(item.review_published_at))}</time></>}</small>
         {item.spoiler?<details><summary>Revelar spoiler</summary><div className="review-text">{item.review}</div></details>:
           <div className="review-text">{item.review}</div>}</div>
+        {viewer&&!item.own&&<ReviewReport key={item.version} title={item.title} username={item.username} version={item.version}/>}
         </div>
       </article>)}
   </section>;
