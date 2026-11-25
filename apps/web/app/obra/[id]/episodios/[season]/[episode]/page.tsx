@@ -19,5 +19,5 @@ export default async function EpisodePage({params}: {
 
   return <App authenticated inviteLogin={Boolean(process.env.OIDC_ISSUER)} emailAccounts={emailAccounts}
     pageTitle={"ep-"+id+"-s"+season+"-e"+episode}
-    episodeContext={{seriesId:id,season:Number(season),episode:Number(episode)}}/>;
+    seriesPart={{seriesId:id,season:Number(season),episode:Number(episode)}}/>;
 }

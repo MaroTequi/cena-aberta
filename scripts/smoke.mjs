@@ -621,6 +621,17 @@ try {
     assert.equal(response.status,200,path);
     return response.json();
   };
+  const seasonPage=await fetch(web+"/obra/demo-mare-alta/temporadas/1",{headers:finalHeaders,redirect:"manual"});
+  assert.equal(seasonPage.status,200);
+  assert.deepEqual((await episodeApi("titles/demo-mare-alta/seasons")).map(item=>item.number),[1,2]);
+  const seasonId="season-demo-mare-alta-s1";
+  assert.equal((await episodeApi("titles/"+seasonId)).format,"seas");
+  assert.deepEqual((await episodeApi("titles/demo-mare-alta/seasons/1")).map(item=>item.name),["Piloto","Segundo episódio"]);
+  const originalEpisodeNotes=await episodeApi("me/episodes/demo-mare-alta/1");
+  await episodeApi("me/library/"+seasonId+"/rating","PUT",{rating:6});
+  await episodeApi("me/library/"+seasonId+"/review","PUT",{review:"Resenha da temporada.",version:0,spoiler:false});
+  assert.equal((await episodeApi("titles/"+seasonId+"/community")).average,3);
+  assert.deepEqual(await episodeApi("me/episodes/demo-mare-alta/1"),originalEpisodeNotes);
   assert.equal((await episodeApi("titles/"+episodeId)).format,"ep");
   const episodeLibrary="me/library/"+episodeId+"/";
   await episodeApi(episodeLibrary+"watched","PUT",{value:true});

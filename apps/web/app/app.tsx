@@ -3,10 +3,11 @@ import {NotificationBell} from "./notification-bell";
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
 import {signIn,signOut} from "next-auth/react";
 import {useRouter} from "next/navigation";
-import {SeriesEpisodes} from "./series-episodes";
+import {SeriesSeasons} from "./series-seasons";
+import Link from "next/link";
 import {EpisodeRatings} from "./episode-ratings";
 import {WorkPeople,type PersonCredit} from "./work-people";
-import {workHref,workKind} from "../lib/work-links";
+import {seasonHref,seasonName,workHref,workKind} from "../lib/work-links";
 import {Poster} from "./poster";
 import {CardTitle} from "./card-title";
 import {ThemePicker} from "./theme-picker";
@@ -164,7 +165,7 @@ function DiaryDialog({dashboard,username,title,name,onClose,renderSession,visibi
 function FilmFacts({title}:{title:Title}) {
   const details=title.details;
   const fields=[
-    [title.format==="ep"?"Série":"Título original",title.original!==title.name?title.original:""],
+    [(title.format==="ep"||title.format==="seas")?"Série":"Título original",title.original!==title.name?title.original:""],
     ["Gêneros",details?.genres.join(", ")],
     ["Duração",details?.runtime?details.runtime+" min":""],
     ["Temporadas",details?.seasons],["Episódios",details?.episodes],
@@ -172,7 +173,7 @@ function FilmFacts({title}:{title:Title}) {
   ].filter(([,value])=>Boolean(value));
   return <>{!!fields.length&&<dl className="film-facts">{fields.map(([label,value])=>
     <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
-    {(title.id.startsWith("demo-")||title.id.startsWith("ep-demo-"))&&<p className="muted"><small>Obra e pôster ilustrativos.</small></p>}</>;
+    {(title.id.startsWith("demo-")||title.id.startsWith("ep-demo-")||title.id.startsWith("season-demo-"))&&<p className="muted"><small>Obra e pôster ilustrativos.</small></p>}</>;
 }
 function Spoiler({hidden,children}:{hidden:boolean;children:ReactNode}) {
   const [open,setOpen]=useState(false);
@@ -218,7 +219,7 @@ function ReviewReader({name,titleId,author,own,watched,text,version,initial}:{
     </dialog>
   </>;
 }
-export function App({chronology,monthlyReviews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false,episodeContext}:{episodeContext?:{seriesId:string;season:number;episode:number};chronology?:ReactNode;monthlyReviews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
+export function App({chronology,monthlyReviews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false,seriesPart}:{seriesPart?:{seriesId:string;season:number;episode?:number};chronology?:ReactNode;monthlyReviews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
   const router=useRouter();
   const [tab,setTab]=useState(initialTab),[query,setQuery]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1);
   const [titles,setTitles]=useState<Title[]>([]),[known,setKnown]=useState<Record<string,Title>>({}),[more,setMore]=useState(false),[demo,setDemo]=useState(false);
@@ -457,11 +458,20 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
               <div className="profile-card-actions">{item.review&&<ReviewReader key={[item.version,item.spoiler,item.my_vote].join("-")} name={saved?.name??label(item.title)} titleId={item.title} author={current.profile!.username} own={owned} watched={!!item.viewer_watched} text={item.review} version={item.version} initial={item}/>}{showSection("diary")&&<button type="button" aria-haspopup="dialog" aria-label={"Abrir Diário de "+(saved?.name??label(item.title))} title="Abrir Diário da obra" onClick={()=>{setError("");setNotice("");setDiaryTitle({id:item.title,name:saved?.name??label(item.title)});}}><UiIcon name="diary"/></button>}</div></div></article>;
           }}/></section>}
           {diaryTitle&&showSection("diary")&&<DiaryDialog key={diaryTitle.id} title={diaryTitle.id} name={diaryTitle.name} dashboard={current} username={owned?undefined:current.profile?.username} onClose={()=>setDiaryTitle(null)} visibility={sectionVisibility("diary","diário")} message={viewing?"":error||notice} renderSession={item=><li key={item.id}><span>{item.watched_on?.split("-").reverse().join("/")??"Data não informada"}{item.watched_at&&<> às <time dateTime={item.watched_at}>{sessionTime.format(new Date(item.watched_at))}</time></>}{item.rewatch?" · Revisto":""}</span>{owned&&<div className="diary-actions"><button type="button" aria-label={"Editar sessão de "+diaryTitle.name} title="Editar sessão" disabled={busy} onClick={()=>{setError("");setViewing(item);}}><UiIcon name="edit"/></button><button type="button" aria-label={"Excluir sessão de "+diaryTitle.name} title="Excluir sessão" disabled={busy} onClick={()=>{if(confirm("Excluir a sessão de "+diaryTitle.name+" do Diário?"))void action(()=>api("me/viewings/"+item.id,"DELETE"),"Registro excluído.");}}><UiIcon name="trash"/></button></div>}</li>}/>}
-          {!owned&&showSection("ranking")&&<section className="panel"><h2><UiIcon name="crown"/> Ranking</h2>{["movie","tv","anime","ep"].map(kind=><div key={kind}><h3>{kind==="movie"?"Filmes":kind==="tv"?"Séries":kind==="ep"?"Episódios":"Animes"}</h3>{rankingCategories.map((category,tier)=><div className={"public-ranking-tier rank-tier-"+tier} key={tier}><h4>{category}</h4><div className="public-ranking-cards">{current.ranking?.filter(item=>item.tier===tier&&(known[item.title]?.anime?"anime":known[item.title]?.format)===kind).map(item=><div className="catalog-card" key={item.title}>{savedCard(item.title)}</div>)}</div></div>)}</div>)}</section>}
+          {!owned&&showSection("ranking")&&<section className="panel"><h2><UiIcon name="crown"/> Ranking</h2>{["movie","tv","anime","seas","ep"].map(kind=><div key={kind}><h3>{kind==="movie"?"Filmes":kind==="tv"?"Séries":kind==="ep"?"Episódios":kind==="seas"?"Temporadas":"Animes"}</h3>{rankingCategories.map((category,tier)=><div className={"public-ranking-tier rank-tier-"+tier} key={tier}><h4>{category}</h4><div className="public-ranking-cards">{current.ranking?.filter(item=>item.tier===tier&&(known[item.title]?.anime?"anime":known[item.title]?.format)===kind).map(item=><div className="catalog-card" key={item.title}>{savedCard(item.title)}</div>)}</div></div>)}</div>)}</section>}
           {!owned&&!profileSections.some(key=>current.visibility?.[key])&&<p className="muted">As seções deste perfil estão privadas.</p>}</>}
         </section>)}
       </>}
-      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading"><h2>Detalhes</h2>{episodeContext&&<a href={workHref(episodeContext.seriesId)}>Voltar à série</a>}</div><div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{episodeContext?((episodeContext.season===0?"Especiais":"Temporada "+episodeContext.season)+" · Episódio "+episodeContext.episode):(workKind(title).toLocaleUpperCase("pt-BR")+" · "+(title.year||"ANO INDISPONÍVEL"))}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
+      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading"><h2>Detalhes</h2></div>
+      {seriesPart&&<nav className="work-back-links" aria-label="Navegação da série">
+        <Link className="room-nav-button" href={workHref(seriesPart.seriesId)}>
+          {seriesPart.episode===undefined&&<UiIcon name="back"/>}Voltar à série
+        </Link>
+        {seriesPart.episode!==undefined&&<Link className="room-nav-button" href={seasonHref(seriesPart.seriesId,seriesPart.season)}>
+          <UiIcon name="back"/>{seriesPart.season===0?"Voltar aos especiais":"Voltar à temporada"}
+        </Link>}
+      </nav>}
+      <div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{seriesPart?(seasonName(seriesPart.season)+(seriesPart.episode===undefined?"":" · Episódio "+seriesPart.episode)):(workKind(title).toLocaleUpperCase("pt-BR")+" · "+(title.year||"ANO INDISPONÍVEL"))}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
       {data?.profile&&<><div className="row">
         <IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}
@@ -476,7 +486,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       <ReviewEditor key={title.id} title={title.id} initial={entry} disabled={busy} onPending={setReviewPending} onSaved={async()=>{await refresh();await refreshCommunity(title.id);}} visibility={visibilityControl({...entry,title:title.id})}/>
       </div>}</>}
       </div></div>
-      {title.format==="tv"&&<SeriesEpisodes key={title.id} title={title.id} seasons={title.details?.seasons??1}/>}
+      {title.format==="tv"&&<SeriesSeasons key={title.id} title={title.id}/>}
       {chronology}
       {!!title.details?.people?.length&&<WorkPeople people={title.details.people} titleId={title.id}/>}
       {community&&<section className="community" aria-labelledby="community-heading">
@@ -510,7 +520,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
         </section>}
       </section>}
       </section>}
-      {title?.format==="tv"&&data?.profile&&entry.watched&&<EpisodeRatings key={title.id} title={title.id} seasons={title.details?.seasons??1} publicSeasons={community?.seasons} onSaved={()=>{void refreshCommunity(title.id);void refresh().catch(fail);}}/>}
+      {title?.format==="seas"&&seriesPart&&<EpisodeRatings key={title.id} title={seriesPart.seriesId} season={seriesPart.season} allowRating={!!data?.profile&&entry.watched}/>}
       <dialog className="session-dialog" ref={sessionDialog} aria-labelledby="session-heading" onCancel={event=>{
         event.preventDefault();
         if(!busy){setPendingViewing(null);setError("");}

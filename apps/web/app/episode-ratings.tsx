@@ -15,8 +15,7 @@ function SeasonScore({label,value,community=false}:{label:string;value:number|un
   </div>;
 }
 
-export function EpisodeRatings({title,seasons,publicSeasons,onSaved}:{title:string;seasons:number;publicSeasons?:SeasonAverage[];onSaved:()=>void}) {
-  const [season,setSeason]=useState(1);
+export function EpisodeRatings({title,season,allowRating}:{title:string;season:number;allowRating:boolean}) {
   const [episodes,setEpisodes]=useState<Episode[]>([]);
   const [ratings,setRatings]=useState<Record<number,number>>({});
   const [loading,setLoading]=useState(true);
@@ -37,7 +36,16 @@ export function EpisodeRatings({title,seasons,publicSeasons,onSaved}:{title:stri
     return ()=>{current=false;};
   },[title,revision,retry]);
   const personalSeason=seasonAverages?.find(item=>item.season===season)?.average;
-  const publicSeason=publicSeasons?.find(item=>item.season===season)?.average;
+  const [publicSeason,setPublicSeason]=useState<number|undefined>(undefined);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setPublicSeason(undefined);
+    fetch("/api/v1/titles/"+title+"/community",{signal:controller.signal})
+      .then(response=>response.ok?response.json():null)
+      .then(result=>{if(!controller.signal.aborted)setPublicSeason(result?.seasons?.find((item:SeasonAverage)=>item.season===season)?.average);})
+      .catch(()=>{});
+    return ()=>controller.abort();
+  },[title,season,revision]);
   const personalSeries=seasonAverages?.length
     ?seasonAverages.reduce((sum,item)=>sum+item.average,0)/seasonAverages.length
     :null;
@@ -68,28 +76,23 @@ export function EpisodeRatings({title,seasons,publicSeasons,onSaved}:{title:stri
         return next;
       });
       setRevision(value=>value+1);
-      onSaved();
     }catch(e){setError(e instanceof Error?e.message:"Falha ao salvar.");}
     finally{setBusy(false);}
   }
   return <section className="panel" aria-labelledby="episodes-heading">
-    <h2 id="episodes-heading">Avaliar episódios</h2>
+    <h2 id="episodes-heading">Episódios</h2>
     {averagesFailed?<p role="alert">Não foi possível carregar suas médias. <button type="button" onClick={()=>setRevision(value=>value+1)}>Tentar novamente</button></p>
       :seasonAverages&&<p><strong>Minha média da série</strong> · {personalSeries===null?"Sem notas por episódio":score(personalSeries)}</p>}
-    <label>Temporada <select value={season} disabled={busy} onChange={event=>setSeason(Number(event.target.value))}>
-      <option value={0}>Especiais</option>
-      {Array.from({length:Math.max(1,seasons)},(_,index)=><option key={index} value={index+1}>Temporada {index+1}</option>)}
-    </select></label>
     <div className="episode-averages">
-      {!averagesFailed&&seasonAverages&&<SeasonScore label="Minha média da temporada" value={personalSeason}/>}
-      {publicSeasons&&<SeasonScore label="Média pública da temporada" value={publicSeason} community/>}
+      {!averagesFailed&&seasonAverages&&<SeasonScore label="Minha média dos episódios" value={personalSeason}/>}
+      <SeasonScore label="Média pública dos episódios" value={publicSeason} community/>
     </div>
     {loading&&<p role="status">Carregando episódios…</p>}
     {error&&<p role="alert">{error} <button onClick={()=>setRetry(value=>value+1)} disabled={busy}>Tentar novamente</button></p>}
     {!loading&&!error&&!episodes.length&&<p>Nenhum episódio disponível.</p>}
-    {episodes.length>0&&<ol className="grid series-episode-list episode-rating-grid">
+    {episodes.length>0&&<ol className={"grid series-episode-list"+(allowRating?" episode-rating-grid":"")}>
       {episodes.map(episode=><EpisodeCard key={episode.number} title={title} season={season} episode={episode}>
-        <StarRating value={ratings[episode.number]??null} disabled={busy||loading} onChange={value=>void rate(episode.number,value)}/>
+        {allowRating&&<StarRating value={ratings[episode.number]??null} disabled={busy||loading} onChange={value=>void rate(episode.number,value)}/>}
       </EpisodeCard>)}
     </ol>}
   </section>;

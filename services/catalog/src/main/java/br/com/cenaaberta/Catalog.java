@@ -353,6 +353,35 @@ public class Catalog {
 
 
 
+    public record Season(int number,String name,String summary,String poster,String year) {}
+
+    @GetMapping("/titles/{id}/seasons")
+    List<Season> seasons(@PathVariable String id) {
+        var series=detail(id);
+        if(!"tv".equals(series.format()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if(id.startsWith("demo-")) {
+            int total=series.details().seasons();
+            return java.util.stream.IntStream.rangeClosed(1,total)
+                .mapToObj(number->new Season(number,seasonName(number),"",null,series.year())).toList();
+        }
+        var result=new ArrayList<Season>();
+        for(var row:remote("/tv/"+id.substring("tmdb-tv-".length())).path("seasons")) {
+            if(!row.path("season_number").canConvertToInt())continue;
+            int number=row.path("season_number").asInt();
+            if(number<0||number>1000||(number==0&&row.path("episode_count").asInt()==0))continue;
+            String name=text(row,"name");
+            String date=text(row,"air_date");
+            result.add(new Season(number,name.isBlank()?seasonName(number):name,text(row,"overview"),
+                posterUrl(row,"w500"),date.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")?date.substring(0,4):""));
+        }
+        result.sort(Comparator.comparingInt(item->item.number()==0?1001:item.number()));
+        return result;
+    }
+
+    private static String seasonName(int number) {
+        return number==0?"Especiais":"Temporada "+number;
+    }
+
     public record Episode(int number,String name,String summary,String still) {}
 
     @GetMapping("/titles/{id}/seasons/{season}")
@@ -424,6 +453,17 @@ public class Catalog {
 
     private static final java.util.regex.Pattern EPISODE_ID=java.util.regex.Pattern.compile("ep-((?:demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12}))-s(0|[1-9][0-9]{0,2}|1000)-e([1-9][0-9]{0,8})");
 
+    private static final java.util.regex.Pattern SEASON_ID=java.util.regex.Pattern.compile("season-(demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12})-s(0|[1-9][0-9]{0,2}|1000)");
+
+    private Title seasonDetail(String id, java.util.regex.Matcher key) {
+        String seriesId=key.group(1);
+        int number=Integer.parseInt(key.group(2));
+        var season=seasons(seriesId).stream().filter(item->item.number()==number).findFirst()
+            .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
+        var series=detail(seriesId);
+        return storeSeriesPart(new Title(id,"seas",false,season.name(),series.name(),season.year(),season.summary(),season.poster()));
+    }
+
     private Title episodeDetail(String id, java.util.regex.Matcher key) {
         String seriesId=key.group(1);
         int season=Integer.parseInt(key.group(2));
@@ -432,10 +472,13 @@ public class Catalog {
             .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
         var series=detail(seriesId);
         String name=episode.name().isBlank()?"Episódio "+number:episode.name();
-        var title=new Title(id,"ep",false,name,series.name(),series.year(),episode.summary(),episode.still());
+        return storeSeriesPart(new Title(id,"ep",false,name,series.name(),series.year(),episode.summary(),episode.still()));
+    }
+
+    private Title storeSeriesPart(Title title) {
         try {
             db.update("insert into title(id,format,anime,name,original,release_year,summary,poster) values(?,?,?,?,?,?,?,?)",
-                id,title.format(),title.anime(),name,title.original(),title.year(),title.summary(),title.poster());
+                title.id(),title.format(),title.anime(),title.name(),title.original(),title.year(),title.summary(),title.poster());
         } catch (org.springframework.dao.DuplicateKeyException concurrentInsert) {
             // Outra consulta já armazenou os metadados.
         }
@@ -464,6 +507,8 @@ public class Catalog {
 
         var episodeKey=EPISODE_ID.matcher(id);
         if(episodeKey.matches())return stored.isEmpty()?episodeDetail(id,episodeKey):stored.getFirst();
+        var seasonKey=SEASON_ID.matcher(id);
+        if(seasonKey.matches())return stored.isEmpty()?seasonDetail(id,seasonKey):stored.getFirst();
 
         if (!stored.isEmpty() && ((stored.getFirst().details()!=null && stored.getFirst().details().people()!=null) || token.isBlank())) return stored.getFirst();
 
@@ -665,7 +710,7 @@ public class Catalog {
 
         }
 
-        var storedIds = ids.stream().distinct().filter(id -> id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}") || EPISODE_ID.matcher(id).matches()).toList();
+        var storedIds = ids.stream().distinct().filter(id -> id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}") || EPISODE_ID.matcher(id).matches() || SEASON_ID.matcher(id).matches()).toList();
 
         var matches = new HashMap<String, Boolean>();
         var filmIds = selected.stream().map(String::valueOf).toList();

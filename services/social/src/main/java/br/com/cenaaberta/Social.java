@@ -243,7 +243,7 @@ public class Social {
 
         validateTitle(title);
 
-        if(EPISODE_ID.matcher(title).matches()||season<0||season>1000||episode<1||episode>999999999||input.rating()!=null&&(input.rating()<1||input.rating()>10))
+        if(EPISODE_ID.matcher(title).matches()||SEASON_ID.matcher(title).matches()||season<0||season>1000||episode<1||episode>999999999||input.rating()!=null&&(input.rating()<1||input.rating()>10))
 
             fail(HttpStatus.BAD_REQUEST,"Episódio ou nota inválidos.");
 
@@ -952,7 +952,8 @@ public class Social {
     private static void validateActor(String actor) { if(actor==null || !actor.matches("[A-Za-z0-9_-]{8,160}")) fail(HttpStatus.UNAUTHORIZED,"Sessão inválida."); }
 
     private static final java.util.regex.Pattern EPISODE_ID=java.util.regex.Pattern.compile("ep-((?:demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12}))-s(0|[1-9][0-9]{0,2}|1000)-e([1-9][0-9]{0,8})");
-    private static void validateTitle(String id) { if(id==null || (!id.matches("demo-[a-z0-9-]{1,60}|tmdb-(movie|tv)-[1-9][0-9]{0,12}") && !EPISODE_ID.matcher(id).matches())) fail(HttpStatus.BAD_REQUEST,"Identificador inválido."); }
+    private static final java.util.regex.Pattern SEASON_ID=java.util.regex.Pattern.compile("season-(demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12})-s(0|[1-9][0-9]{0,2}|1000)");
+    private static void validateTitle(String id) { if(id==null || (!id.matches("demo-[a-z0-9-]{1,60}|tmdb-(movie|tv)-[1-9][0-9]{0,12}") && !EPISODE_ID.matcher(id).matches() && !SEASON_ID.matcher(id).matches())) fail(HttpStatus.BAD_REQUEST,"Identificador inválido."); }
 
     private static void checkDate(LocalDate date) { if(date!=null && date.isAfter(LocalDate.now(DIARY_ZONE))) fail(HttpStatus.BAD_REQUEST,"A data não pode estar no futuro."); }
 
