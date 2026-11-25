@@ -410,6 +410,3 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 
 .series-episode-list{margin:12px 0;padding:0;list-style:none}
 .episode-rating-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr))}
-.episode-detail{display:grid;gap:24px;grid-template-columns:minmax(0,280px) minmax(0,1fr);align-items:start}
-.episode-detail .poster{aspect-ratio:16/9}
-@media(max-width:600px){.episode-detail{grid-template-columns:minmax(0,1fr)}}

@@ -1,4 +1,5 @@
 "use client";
+import {workHref} from "../lib/work-links";
 import {useEffect,useRef,useState,type ReactNode} from "react";
 
 type Film={id:string;name:string;poster:string|null};
@@ -72,7 +73,7 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
       onDragEnd={()=>setDragging("")}
       onDragOver={event=>{if(dragging){event.preventDefault();event.stopPropagation();}}}
       onDrop={event=>{event.preventDefault();event.stopPropagation();move(event.dataTransfer.getData(dragType),tier,film.id);setDragging("");}}>
-      <a href={"/obra/"+film.id} draggable={false} className="rank-poster" title={film.name}>
+      <a href={workHref(film.id)} draggable={false} className="rank-poster" title={film.name}>
         {film.poster?<img src={film.poster} alt={film.name} draggable={false} loading="lazy"/>:<span>{film.name}</span>}
       </a>
       <label className="sr-only" htmlFor={"rank-"+film.id}>Categoria de {film.name}</label>
@@ -91,7 +92,7 @@ export function FilmRanking({films,visibility}:{visibility?:ReactNode;films:(Fil
   return <section className="panel ranking" aria-labelledby="ranking-heading">
     <div className="section-heading ranking-heading"><div className="section-title-controls"><h2 id="ranking-heading" className="ranking-title"><span aria-hidden="true">👑</span> Meu ranking</h2>{visibility}</div><button className="primary" disabled={!dirty||busy||!ranking} onClick={()=>void save()}>{busy?"Salvando…":"Salvar ranking"}</button></div>
     <div className="row ranking-tabs" role="group" aria-label="Tipo de obra">
-      {[["movie","Filmes"],["tv","Séries"],["anime","Animes"]].map(([id,label])=><button key={id} type="button"
+      {[["movie","Filmes"],["tv","Séries"],["anime","Animes"],["ep","Episódios"]].map(([id,label])=><button key={id} type="button"
         aria-pressed={kind===id} onClick={()=>setKind(id)}>{label}</button>)}
     </div>
     <p className="muted">Arraste as obras assistidas para uma categoria. As posições são salvas automaticamente. No celular ou pelo teclado, use o seletor de cada card.</p>

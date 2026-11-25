@@ -198,10 +198,24 @@ try {
   assert.equal(ratedSeries.interest,false);
   assert.equal((await request(social,episodePath))[0].rating,7);
   assert.deepEqual(await request(social,episodePath,{user:"demo_second_user"}),[]);
+  const episodeId="ep-demo-mare-alta-s1-e1";
+  assert.equal((await request(catalog,"/titles/"+episodeId)).name,"Piloto");
+  const episodeEntry=(await request(social,"/me?title="+episodeId)).library.find(item=>item.title===episodeId);
+  assert.equal(episodeEntry.rating,7);
+  assert.equal(episodeEntry.watched,true);
+  const changeEpisode=(action,body)=>request(social,"/me/library/"+episodeId+"/"+action,{method:"PUT",body});
+  await changeEpisode("rating",{rating:8});
+  assert.equal((await request(social,episodePath))[0].rating,8);
+  await changeEpisode("rating",{rating:7});
+
   const seriesCommunity="/titles/demo-mare-alta/community";
   const seriesVisibility="/me/library/demo-mare-alta/visibility";
   assert.equal(ratedSeries.evaluation_public,true);assert.equal(ratedSeries.spoiler,false);
   assert.equal((await request(social,seriesCommunity)).average,3.5);
+  await changeEpisode("visibility",{value:false});
+  assert.equal((await request(social,"/titles/"+episodeId+"/community")).average,null);
+  assert.equal((await request(social,seriesCommunity)).average,null);
+  await changeEpisode("visibility",{value:true});
   await request(social,seriesVisibility,{method:"PUT",body:{value:false}});
   assert.equal((await request(social,seriesCommunity)).average,null);
   await request(social,seriesVisibility,{method:"PUT",body:{value:true}});
@@ -599,6 +613,27 @@ try {
   await visibilityUpdate("all",false);await visibilityUpdate("watched",true);
   assert.equal((await fetch(web+"/api/v1/me/visibility",{method:"PUT",headers:finalHeaders,body:JSON.stringify({section:"actor",visible:true})})).status,400);
   console.log("Privacidade: seções filtradas na API, controle geral e acesso do proprietário verificados.");
+
+  const episodePage=await fetch(web+"/obra/demo-mare-alta/episodios/1/1",{headers:finalHeaders,redirect:"manual"});
+  assert.equal(episodePage.status,200);
+  const episodeApi=async(path,method="GET",body)=>{
+    const response=await fetch(web+"/api/v1/"+path,{method,headers:finalHeaders,body:JSON.stringify(body)});
+    assert.equal(response.status,200,path);
+    return response.json();
+  };
+  assert.equal((await episodeApi("titles/"+episodeId)).format,"ep");
+  const episodeLibrary="me/library/"+episodeId+"/";
+  await episodeApi(episodeLibrary+"watched","PUT",{value:true});
+  await episodeApi(episodeLibrary+"rating","PUT",{rating:9});
+  await episodeApi(episodeLibrary+"visibility","PUT",{value:true});
+  await episodeApi(episodeLibrary+"review","PUT",{review:"Resenha do episódio.",version:0,spoiler:true});
+  const episodeCommunity=await episodeApi("titles/"+episodeId+"/community");
+  assert.equal(episodeCommunity.rating_count,2);
+  assert.equal(episodeCommunity.average,4.75);
+  assert.equal(episodeCommunity.reviews[0].spoiler,true);
+  assert((await episodeApi("diary?page=1&title="+episodeId)).items.length);
+  assert((await episodeApi("me/ranking/"+episodeId,"PUT",{tier:2})).items.some(item=>item.title===episodeId&&item.tier===2));
+  console.log("Episódio: página autenticada, avaliação, resenha com spoiler, Diário e ranking verificados.");
 
   const roomResponse=await fetch(web+"/api/v1/rooms",{method:"POST",headers:finalHeaders,body:JSON.stringify({name:"Segunda rodada teste"})});assert.equal(roomResponse.status,200);
   const reconsiderRoom=(await roomResponse.json()).id;

@@ -243,7 +243,7 @@ public class Social {
 
         validateTitle(title);
 
-        if(season<0||season>1000||episode<1||input.rating()!=null&&(input.rating()<1||input.rating()>10))
+        if(EPISODE_ID.matcher(title).matches()||season<0||season>1000||episode<1||episode>999999999||input.rating()!=null&&(input.rating()<1||input.rating()>10))
 
             fail(HttpStatus.BAD_REQUEST,"Episódio ou nota inválidos.");
 
@@ -273,18 +273,24 @@ public class Social {
 
         }
 
-        db.update("delete from episode_rating where actor=? and title=? and season=? and episode=?",actor,title,season,episode);
+        String episodeId="ep-"+title+"-s"+season+"-e"+episode;
+        if(input.rating()!=null && !exists("select count(*) from library where actor=? and title=?",actor,episodeId)) {
+            createLibraryEntry(actor,episodeId,title);
+        }
+        db.update("update library set rating=? where actor=? and title=?",input.rating(),actor,episodeId);
+        if(input.rating()!=null)mark(actor,episodeId);
+        saveEpisodeRating(actor,title,season,episode,input.rating());
+    }
 
-        if(input.rating()!=null) {
-            db.update("insert into episode_rating values(?,?,?,?,?)",actor,title,season,episode,input.rating());
+    private void saveEpisodeRating(String actor,String title,int season,int episode,Integer rating) {
+        db.update("delete from episode_rating where actor=? and title=? and season=? and episode=?",actor,title,season,episode);
+        if(rating!=null) {
+            db.update("insert into episode_rating values(?,?,?,?,?)",actor,title,season,episode,rating);
             if(!exists("select count(*) from library where actor=? and title=?",actor,title))
                 db.update("insert into library(actor,title,evaluation_public,spoiler) values(?,?,true,false)",actor,title);
             mark(actor,title);
         }
-
     }
-
-
 
     @GetMapping("/me") Map<String,Object> me(@RequestHeader("X-Actor") String actor, @RequestParam(defaultValue="false") boolean summary, @RequestParam(required=false) String title) {
 
@@ -394,7 +400,9 @@ public class Social {
         params.add(viewer);params.add(viewer);params.addAll(ids);
         return db.queryForList("select l.title,p.username,p.name,p.avatar,l.review,l.review_published_at,"
             +"case when l.title like 'tmdb-tv-%' then (select avg(s.season_score) from "
-            +"(select e.actor,e.title,e.season,avg(e.rating) as season_score from episode_rating e group by e.actor,e.title,e.season) s "
+            +"(select e.actor,e.title,e.season,avg(e.rating) as season_score from episode_rating e "
+            +"join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode) "
+            +"where ep.evaluation_public and not ep.hidden group by e.actor,e.title,e.season) s "
             +"where s.actor=l.actor and s.title=l.title) else l.rating end as rating,"
             +"case when l.actor=? or exists(select 1 from library w where w.actor=? and w.title=l.title and w.watched) "
             +"then false else "+EFFECTIVE_SPOILER+" end as spoiler"+FEED_SOURCE
@@ -438,8 +446,10 @@ public class Social {
             var publicEpisodes=db.queryForList("""
                 select e.actor,e.season,e.rating from episode_rating e
                 join library l on l.actor=e.actor and l.title=e.title
+                join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode)
                 join profile p on p.actor=e.actor
-                where e.title=? and l.evaluation_public=true and l.hidden=false and p.active=true
+                where e.title=? and l.evaluation_public=true and l.hidden=false
+                    and ep.evaluation_public=true and ep.hidden=false and p.active=true
                 """,id);
             var bySeason=new TreeMap<Integer,IntSummaryStatistics>();
             var viewers=new HashSet<>();
@@ -535,6 +545,9 @@ public class Social {
                 db.update("update library set rating=? where actor=? and title=?",value,actor,id);
 
                 if (value!=null) mark(actor,id);
+                var episodeKey=EPISODE_ID.matcher(id);
+                if(episodeKey.matches())saveEpisodeRating(actor,episodeKey.group(1),
+                    Integer.parseInt(episodeKey.group(2)),Integer.parseInt(episodeKey.group(3)),value);
 
             }
 
@@ -817,6 +830,12 @@ public class Social {
 
 
 
+    private void createLibraryEntry(String actor,String id,String seriesId) {
+        boolean visible=seriesId==null || !exists(
+            "select count(*) from library where actor=? and title=? and (not evaluation_public or hidden)",actor,seriesId);
+        db.update("insert into library(actor,title,evaluation_public,spoiler) values(?,?,?,false)",actor,id,visible);
+    }
+
     private String verifyTitle(String id) {
 
         validateTitle(id);
@@ -903,7 +922,8 @@ public class Social {
 
     private static void validateActor(String actor) { if(actor==null || !actor.matches("[A-Za-z0-9_-]{8,160}")) fail(HttpStatus.UNAUTHORIZED,"Sessão inválida."); }
 
-    private static void validateTitle(String id) { if(id==null || !id.matches("demo-[a-z0-9-]{1,60}|tmdb-(movie|tv)-[1-9][0-9]{0,12}")) fail(HttpStatus.BAD_REQUEST,"Identificador inválido."); }
+    private static final java.util.regex.Pattern EPISODE_ID=java.util.regex.Pattern.compile("ep-((?:demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12}))-s(0|[1-9][0-9]{0,2}|1000)-e([1-9][0-9]{0,8})");
+    private static void validateTitle(String id) { if(id==null || (!id.matches("demo-[a-z0-9-]{1,60}|tmdb-(movie|tv)-[1-9][0-9]{0,12}") && !EPISODE_ID.matcher(id).matches())) fail(HttpStatus.BAD_REQUEST,"Identificador inválido."); }
 
     private static void checkDate(LocalDate date) { if(date!=null && date.isAfter(LocalDate.now(DIARY_ZONE))) fail(HttpStatus.BAD_REQUEST,"A data não pode estar no futuro."); }
 

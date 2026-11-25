@@ -6,6 +6,7 @@ import {useRouter} from "next/navigation";
 import {SeriesEpisodes} from "./series-episodes";
 import {EpisodeRatings} from "./episode-ratings";
 import {WorkPeople,type PersonCredit} from "./work-people";
+import {workHref,workKind} from "../lib/work-links";
 import {Poster} from "./poster";
 import {CardTitle} from "./card-title";
 import {ThemePicker} from "./theme-picker";
@@ -162,7 +163,7 @@ function DiaryDialog({dashboard,username,title,name,onClose,renderSession,visibi
 function FilmFacts({title}:{title:Title}) {
   const details=title.details;
   const fields=[
-    ["Título original",title.original!==title.name?title.original:""],
+    [title.format==="ep"?"Série":"Título original",title.original!==title.name?title.original:""],
     ["Gêneros",details?.genres.join(", ")],
     ["Duração",details?.runtime?details.runtime+" min":""],
     ["Temporadas",details?.seasons],["Episódios",details?.episodes],
@@ -170,7 +171,7 @@ function FilmFacts({title}:{title:Title}) {
   ].filter(([,value])=>Boolean(value));
   return <>{!!fields.length&&<dl className="film-facts">{fields.map(([label,value])=>
     <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
-    {title.id.startsWith("demo-")&&<p className="muted"><small>Obra e pôster ilustrativos.</small></p>}</>;
+    {(title.id.startsWith("demo-")||title.id.startsWith("ep-demo-"))&&<p className="muted"><small>Obra e pôster ilustrativos.</small></p>}</>;
 }
 function Spoiler({hidden,children}:{hidden:boolean;children:ReactNode}) {
   const [open,setOpen]=useState(false);
@@ -215,7 +216,7 @@ function ReviewReader({name,titleId,author,own,watched,text,version,initial}:{
     </dialog>
   </>;
 }
-export function App({chronology,monthlyReviews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false}:{chronology?:ReactNode;monthlyReviews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
+export function App({chronology,monthlyReviews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false,episodeContext}:{episodeContext?:{seriesId:string;season:number;episode:number};chronology?:ReactNode;monthlyReviews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
   const router=useRouter();
   const [tab,setTab]=useState(initialTab),[query,setQuery]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1);
   const [titles,setTitles]=useState<Title[]>([]),[known,setKnown]=useState<Record<string,Title>>({}),[more,setMore]=useState(false),[demo,setDemo]=useState(false);
@@ -287,7 +288,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
     pendingKeys.current.delete(fingerprint);
     return result;
   }
-  function open(id:string) {router.push("/obra/"+encodeURIComponent(id));}
+  function open(id:string) {router.push(workHref(id));}
   async function loadTitle(id:string) {
     const sequence=++openSequence.current;
     setError("");setNotice("");setCommunity(null);
@@ -381,7 +382,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
     return <button className="card" onClick={()=>open(id)}>
       {work?<Poster title={work}/>:<div className="poster"><span>{label(id)}</span></div>}
       <CardTitle>{label(id)}</CardTitle>
-      {work&&<small>{work.year} · {work.anime?"Anime":work.format==="movie"?"Filme":"Série"}</small>}
+      {work&&<small>{work.year} · {workKind(work)}</small>}
     </button>;
   }
   async function visit(username:string) {
@@ -429,7 +430,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           <CatalogSearch key={tab} category={tab} query={query} onChange={value=>{setQuery(value);if(!value){setSearch("");setPage(1);}}}
             onSearch={()=>{setSearch(query.trim());setPage(1);}} onOpen={open}/></div><div className="reel" aria-hidden="true"><i/><i/><i/></div></section>
           <section aria-busy={loading}><div className="section-heading"><h2>{search?"Resultados da busca":categories.find(([id])=>id===tab)?.[1]}</h2>{demo&&<span className="muted">Catálogo fictício</span>}</div>
-          {loading?<p>Carregando catálogo…</p>:titles.length?<div className="grid">{titles.map(item=><article className="catalog-card" key={item.id}><button className="card" onClick={()=>open(item.id)}><Poster title={item}/><CardTitle>{item.name}</CardTitle><small>{item.year} · {item.anime?"Anime":item.format==="movie"?"Filme":"Série"}</small></button></article>)}</div>:<p>Nenhuma obra nesta página.</p>}
+          {loading?<p>Carregando catálogo…</p>:titles.length?<div className="grid">{titles.map(item=><article className="catalog-card" key={item.id}><button className="card" onClick={()=>open(item.id)}><Poster title={item}/><CardTitle>{item.name}</CardTitle><small>{item.year} · {workKind(item)}</small></button></article>)}</div>:<p>Nenhuma obra nesta página.</p>}
           {(page>1||more)&&<div className="row pagination"><button disabled={page===1} onClick={()=>setPage(page-1)}>Anterior</button><span>Página {page}</span><button disabled={!more} onClick={()=>setPage(page+1)}>Próxima</button></div>}</section>
           {tab==="all"&&!search&&monthlyReviews}
         </>:<section><div className="section-heading profile-heading"><div className="row">{current?.profile&&<ProfileAvatar name={current.profile.name} avatar={current.profile.avatar}/>}<div><h1>{current?.profile?.name??"Meu perfil"}</h1>{current?.profile&&<span className="muted">@{current.profile.username}</span>}</div></div></div>
@@ -443,22 +444,22 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
             return <button key={item.title} className="card" onClick={()=>open(item.title)}>
               {saved?<Poster title={saved}/>:<div className="poster art-0"><span>{label(item.title)}</span></div>}
               <CardTitle>{(saved?.name??label(item.title))}</CardTitle>
-              {saved&&<small>{saved.year} · {saved.anime?"Anime":saved.format==="movie"?"Filme":"Série"}</small>}
+              {saved&&<small>{saved.year} · {workKind(saved)}</small>}
             </button>;
           }}/></section>}
           {showSection("watched")&&<section className="panel"><div className="section-heading"><h2>Já vistos e avaliações</h2>{sectionVisibility("watched","já vistos")}</div><LibraryPage key={current.profile.username} section="watched" dashboard={current} username={owned?undefined:current.profile.username} render={(item,saved)=>{
             return <article className="catalog-card" key={item.title}><button className="card" onClick={()=>open(item.title)}>
               {saved?<Poster title={saved}/>:<div className="poster art-0"><span>{label(item.title)}</span></div>}
-              <CardTitle>{(saved?.name??label(item.title))}</CardTitle>{saved&&<small>{saved.year} · {saved.anime?"Anime":saved.format==="movie"?"Filme":"Série"}</small>}
-            </button><div className="diary-rating">{saved?.format==="movie"&&item.rating&&<span>★ {displayRating(item.rating)}</span>}
+              <CardTitle>{(saved?.name??label(item.title))}</CardTitle>{saved&&<small>{saved.year} · {workKind(saved)}</small>}
+            </button><div className="diary-rating">{saved && saved.format!=="tv"&&item.rating&&<span>★ {displayRating(item.rating)}</span>}
               <div className="profile-card-actions">{item.review&&<ReviewReader key={[item.version,item.spoiler,item.my_vote].join("-")} name={saved?.name??label(item.title)} titleId={item.title} author={current.profile!.username} own={owned} watched={!!item.viewer_watched} text={item.review} version={item.version} initial={item}/>}{showSection("diary")&&<button type="button" aria-haspopup="dialog" aria-label={"Abrir Diário de "+(saved?.name??label(item.title))} title="Abrir Diário da obra" onClick={()=>{setError("");setNotice("");setDiaryTitle({id:item.title,name:saved?.name??label(item.title)});}}><UiIcon name="diary"/></button>}</div></div></article>;
           }}/></section>}
           {diaryTitle&&showSection("diary")&&<DiaryDialog key={diaryTitle.id} title={diaryTitle.id} name={diaryTitle.name} dashboard={current} username={owned?undefined:current.profile?.username} onClose={()=>setDiaryTitle(null)} visibility={sectionVisibility("diary","diário")} message={viewing?"":error||notice} renderSession={item=><li key={item.id}><span>{item.watched_on?.split("-").reverse().join("/")??"Data não informada"}{item.watched_at&&<> às <time dateTime={item.watched_at}>{sessionTime.format(new Date(item.watched_at))}</time></>}{item.rewatch?" · Revisto":""}</span>{owned&&<div className="diary-actions"><button type="button" aria-label={"Editar sessão de "+diaryTitle.name} title="Editar sessão" disabled={busy} onClick={()=>{setError("");setViewing(item);}}><UiIcon name="edit"/></button><button type="button" aria-label={"Excluir sessão de "+diaryTitle.name} title="Excluir sessão" disabled={busy} onClick={()=>{if(confirm("Excluir a sessão de "+diaryTitle.name+" do Diário?"))void action(()=>api("me/viewings/"+item.id,"DELETE"),"Registro excluído.");}}><UiIcon name="trash"/></button></div>}</li>}/>}
-          {!owned&&showSection("ranking")&&<section className="panel"><h2><UiIcon name="crown"/> Ranking</h2>{["movie","tv","anime"].map(kind=><div key={kind}><h3>{kind==="movie"?"Filmes":kind==="tv"?"Séries":"Animes"}</h3>{rankingCategories.map((category,tier)=><div className={"public-ranking-tier rank-tier-"+tier} key={tier}><h4>{category}</h4><div className="public-ranking-cards">{current.ranking?.filter(item=>item.tier===tier&&(known[item.title]?.anime?"anime":known[item.title]?.format)===kind).map(item=><div className="catalog-card" key={item.title}>{savedCard(item.title)}</div>)}</div></div>)}</div>)}</section>}
+          {!owned&&showSection("ranking")&&<section className="panel"><h2><UiIcon name="crown"/> Ranking</h2>{["movie","tv","anime","ep"].map(kind=><div key={kind}><h3>{kind==="movie"?"Filmes":kind==="tv"?"Séries":kind==="ep"?"Episódios":"Animes"}</h3>{rankingCategories.map((category,tier)=><div className={"public-ranking-tier rank-tier-"+tier} key={tier}><h4>{category}</h4><div className="public-ranking-cards">{current.ranking?.filter(item=>item.tier===tier&&(known[item.title]?.anime?"anime":known[item.title]?.format)===kind).map(item=><div className="catalog-card" key={item.title}>{savedCard(item.title)}</div>)}</div></div>)}</div>)}</section>}
           {!owned&&!profileSections.some(key=>current.visibility?.[key])&&<p className="muted">As seções deste perfil estão privadas.</p>}</>}
         </section>)}
       </>}
-      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading"><h2>Detalhes</h2></div><div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{title.anime?"ANIME":title.format==="movie"?"FILME":"SÉRIE"} · {title.year||"ANO INDISPONÍVEL"}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
+      {title&&<section ref={detail} tabIndex={-1} className="panel detail" aria-label="Detalhes da obra"><div className="section-heading"><h2>Detalhes</h2>{episodeContext&&<a href={workHref(episodeContext.seriesId)}>Voltar à série</a>}</div><div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{episodeContext?((episodeContext.season===0?"Especiais":"Temporada "+episodeContext.season)+" · Episódio "+episodeContext.episode):(workKind(title).toLocaleUpperCase("pt-BR")+" · "+(title.year||"ANO INDISPONÍVEL"))}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
       {data?.profile&&<><div className="row">
         <IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}
@@ -469,7 +470,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
         }}>Registrar sessão</button></>}</div>
       {entry.watched&&<div className="form">
       {rankControl(title.id)}
-      {title.format==="movie"&&<StarRating key={title.id} disabled={busy} value={entry.rating} onChange={rating=>{void update("rating",{rating});}}/>}
+      {title.format!=="tv"&&<StarRating key={title.id} disabled={busy} value={entry.rating} onChange={rating=>{void update("rating",{rating});}}/>}
       <ReviewEditor key={title.id} title={title.id} initial={entry} disabled={busy} onPending={setReviewPending} onSaved={async()=>{await refresh();await refreshCommunity(title.id);}} visibility={visibilityControl({...entry,title:title.id})}/>
       </div>}</>}
       </div></div>
@@ -486,7 +487,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           <div className="row review-author"><button className="review-author-link" disabled={review.username===data?.profile?.username} onClick={()=>visit(review.username)}>
             <ProfileAvatar name={review.name} avatar={review.avatar}/>{review.name}
           </button>
-          {title.format==="movie"&&review.rating!==null&&<span className="review-score">★ {displayRating(review.rating)}</span>}</div>
+          {title.format!=="tv"&&review.rating!==null&&<span className="review-score">★ {displayRating(review.rating)}</span>}</div>
           <ReviewReader key={[title.id,review.version,review.spoiler,review.my_vote].join("-")} titleId={title.id} author={review.username} own={review.username===data?.profile?.username} watched={entry.watched} text={review.review} version={review.version} initial={review}/>
         </article>)}
         {showCommunityDemo&&<section className="community" aria-label="Comunidade de demonstração">

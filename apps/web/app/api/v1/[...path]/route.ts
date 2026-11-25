@@ -30,7 +30,7 @@ const routes = [
   ["GET", /^me\/ranking$/,"social"],
   ["PUT", /^me\/ranking(?:\/[a-z0-9-]+)?$/,"social"],
   ["GET", /^title-batch$/,"catalog"],
-  ["GET", /^titles(?:\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+))?$/,"catalog"],
+  ["GET", /^titles(?:\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+|ep-[a-z0-9-]+))?$/,"catalog"],
   ["PUT", /^titles\/[a-z0-9-]+\/spoiler-vote$/,"social"],
   ["GET", /^(?:me|profiles\/[a-z0-9_]+|titles\/[a-z0-9-]+\/(?:reviews|community))$/,"social"],
   ["PUT", /^me\/(?:profile|library\/[a-z0-9-]+\/(?:watched|interest|rating|review|rewatching|visibility)|viewings\/[a-f0-9-]{36})$/,"social"],

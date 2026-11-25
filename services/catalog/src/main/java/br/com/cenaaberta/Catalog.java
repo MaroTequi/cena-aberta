@@ -422,6 +422,26 @@ public class Catalog {
         return List.copyOf(result.values());
     }
 
+    private static final java.util.regex.Pattern EPISODE_ID=java.util.regex.Pattern.compile("ep-((?:demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12}))-s(0|[1-9][0-9]{0,2}|1000)-e([1-9][0-9]{0,8})");
+
+    private Title episodeDetail(String id, java.util.regex.Matcher key) {
+        String seriesId=key.group(1);
+        int season=Integer.parseInt(key.group(2));
+        int number=Integer.parseInt(key.group(3));
+        var episode=episodes(seriesId,season).stream().filter(item->item.number()==number).findFirst()
+            .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
+        var series=detail(seriesId);
+        String name=episode.name().isBlank()?"Episódio "+number:episode.name();
+        var title=new Title(id,"ep",false,name,series.name(),series.year(),episode.summary(),episode.still());
+        try {
+            db.update("insert into title(id,format,anime,name,original,release_year,summary,poster) values(?,?,?,?,?,?,?,?)",
+                id,title.format(),title.anime(),name,title.original(),title.year(),title.summary(),title.poster());
+        } catch (org.springframework.dao.DuplicateKeyException concurrentInsert) {
+            // Outra consulta já armazenou os metadados.
+        }
+        return title;
+    }
+
     @GetMapping("/titles/{id}") Title detail(@PathVariable String id) {
 
         var sample = fixtures.stream().filter(t -> t.id().equals(id)).findFirst();
@@ -441,6 +461,9 @@ public class Catalog {
             catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { return title; }
 
         },id);
+
+        var episodeKey=EPISODE_ID.matcher(id);
+        if(episodeKey.matches())return stored.isEmpty()?episodeDetail(id,episodeKey):stored.getFirst();
 
         if (!stored.isEmpty() && ((stored.getFirst().details()!=null && stored.getFirst().details().people()!=null) || token.isBlank())) return stored.getFirst();
 
@@ -642,7 +665,7 @@ public class Catalog {
 
         }
 
-        var storedIds = ids.stream().distinct().filter(id -> id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}")).toList();
+        var storedIds = ids.stream().distinct().filter(id -> id.matches("tmdb-(movie|tv)-[1-9][0-9]{0,12}") || EPISODE_ID.matcher(id).matches()).toList();
 
         var matches = new HashMap<String, Boolean>();
         var filmIds = selected.stream().map(String::valueOf).toList();
@@ -664,7 +687,7 @@ public class Catalog {
         }
 
         var missing=storedIds.stream().filter(id -> output.stream().noneMatch(t -> t.id().equals(id))).toList();
-        if(!missing.isEmpty()&&!token.isBlank()) {
+        if(!missing.isEmpty()) {
             try(var executor=java.util.concurrent.Executors.newFixedThreadPool(6)) {
                 var tasks=missing.stream().map(id -> executor.submit(() -> {
                     try { return detail(id); }
