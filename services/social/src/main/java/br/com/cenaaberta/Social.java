@@ -293,32 +293,28 @@ public class Social {
         validateTitle(series);
         if(SEASON_ID.matcher(series).matches()||EPISODE_ID.matcher(series).matches()||season<0||season>1000)
             fail(HttpStatus.BAD_REQUEST,"Temporada inválida.");
+        return catalogNumbers("/titles/"+series+"/seasons/"+season,"number",1,999999999);
+    }
+
+    private Set<Integer> catalogNumbers(String path,String field,int minimum,int maximum) {
         try {
-
-            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/titles/"+series+"/seasons/"+season))
-
+            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+path))
                 .timeout(Duration.ofSeconds(5)).header("X-Internal-Key",catalogKey).GET().build(),HttpResponse.BodyHandlers.ofString());
-
-            if(response.statusCode()!=200)fail(response.statusCode()==404?HttpStatus.NOT_FOUND:HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível consultar os episódios.");
-
-            Set<Integer> episodes=new LinkedHashSet<>();
+            if(response.statusCode()!=200)
+                fail(response.statusCode()==404?HttpStatus.NOT_FOUND:HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível consultar o catálogo da série.");
+            Set<Integer> numbers=new LinkedHashSet<>();
             for(var item:mapper.readTree(response.body())) {
-                int number=item.path("number").asInt();
-                if(number>0&&number<=999999999)episodes.add(number);
+                var value=item.path(field);
+                if(value.isIntegralNumber()&&value.canConvertToInt()&&value.asInt()>=minimum&&value.asInt()<=maximum)
+                    numbers.add(value.asInt());
             }
-            return episodes;
+            return numbers;
         } catch(InterruptedException e) {
-
             Thread.currentThread().interrupt();
-
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-
         } catch(java.io.IOException e) {
-
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-
         }
-
     }
 
     record SeasonProgress(int watched,int total,Double average,boolean rewatched) {}
@@ -329,22 +325,27 @@ public class Social {
         return seasonProgress(actor,series,season,seasonEpisodes(series,season));
     }
 
-    @PutMapping("/me/season-progress/{series}/{season}")
-    @Transactional
-    SeasonProgress completeSeason(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
-        var episodes=seasonEpisodes(series,season);
-        lockActive(actor);
-        String prefix="ep-"+series+"-s"+season+"-e";
-        var watched=watchedEpisodes(actor,prefix);
-        OffsetDateTime now=OffsetDateTime.now(DIARY_ZONE);
-        for(int episode:episodes) {
-            String id=prefix+episode;
-            if(watched.contains(id))continue;
-            if(!exists("select count(*) from library where actor=? and title=?",actor,id))createLibraryEntry(actor,id,series);
-            recordFirstViewing(actor,id,now);
-        }
-        syncSeasonWatched(actor,series,season);
-        return seasonProgress(actor,series,season,episodes);
+    @GetMapping("/me/series-progress/{series}")
+    Map<String,Boolean> seriesProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series) {
+        active(actor);
+        validateTitle(series);
+        if(!episodic(series))fail(HttpStatus.BAD_REQUEST,"Série inválida.");
+        var seasons=catalogNumbers("/titles/"+series+"/seasons","number",0,1000);
+        if(seasons.isEmpty())return Map.of("complete",false);
+
+        String seasonPrefix="season-"+series+"-s";
+        var repeatedSeasons=repeatedViewings(actor,seasonPrefix);
+        if(seasons.stream().allMatch(season->repeatedSeasons.contains(seasonPrefix+season)))
+            return Map.of("complete",true);
+
+        String episodePrefix="ep-"+series+"-s";
+        var repeatedEpisodes=repeatedViewings(actor,episodePrefix);
+        var seasonPrefixes=seasons.stream().map(season->episodePrefix+season+"-e").toList();
+        if(seasonPrefixes.stream().anyMatch(prefix->repeatedEpisodes.stream().noneMatch(id->id.startsWith(prefix))))
+            return Map.of("complete",false);
+
+        return Map.of("complete",seasons.stream().allMatch(season->
+            allEpisodesRepeated(episodePrefix+season+"-e",seasonEpisodes(series,season),repeatedEpisodes)));
     }
 
     private SeasonProgress seasonProgress(String actor,String series,int season,Set<Integer> episodes) {
@@ -357,12 +358,18 @@ public class Social {
     }
 
     private boolean seasonRewatched(String actor,String prefix,Set<Integer> episodes) {
-        if(episodes.isEmpty())return false;
-        var repeated=new HashSet<>(db.queryForList("""
+        return allEpisodesRepeated(prefix,episodes,repeatedViewings(actor,prefix));
+    }
+
+    private static boolean allEpisodesRepeated(String prefix,Set<Integer> episodes,Set<String> repeated) {
+        return !episodes.isEmpty()&&episodes.stream().allMatch(number->repeated.contains(prefix+number));
+    }
+
+    private Set<String> repeatedViewings(String actor,String prefix) {
+        return new HashSet<>(db.queryForList("""
             select title from viewing where actor=? and title like ?
             group by title having count(*)>=2
             """,String.class,actor,prefix+"%"));
-        return episodes.stream().allMatch(number->repeated.contains(prefix+number));
     }
 
     private Set<String> watchedEpisodes(String actor,String prefix) {

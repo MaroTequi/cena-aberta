@@ -29,7 +29,7 @@ const routes = [
   ["PUT", /^rooms\/[a-f0-9-]{36}\/votes\/[a-z0-9-]+$/,"social"],
   ["GET", /^titles\/[a-z0-9-]+\/seasons(?:\/[0-9]+)?$/,"catalog"],
   ["GET", /^me\/season-progress\/[a-z0-9-]+\/[0-9]+$/,"social"],
-  ["PUT", /^me\/season-progress\/[a-z0-9-]+\/[0-9]+$/,"social"],
+  ["GET", /^me\/series-progress\/[a-z0-9-]+$/,"social"],
   ["GET", /^me\/episodes\/[a-z0-9-]+(?:\/[0-9]+)?$/,"social"],
   ["PUT", /^me\/episodes\/[a-z0-9-]+\/[0-9]+\/[0-9]+$/,"social"],
   ["GET", /^me\/ranking$/,"social"],
@@ -76,7 +76,7 @@ async function proxy(request:Request,{params}:{params:Promise<{path:string[]}>})
       const payload=new Uint8Array(bytes);let position=0;for(const chunk of chunks){payload.set(chunk,position);position+=chunk.byteLength;}body=new TextDecoder().decode(payload);
       headers["Content-Type"]="application/json";
     }
-    const result=await fetch(base+"/"+path+(backup?"":url.search),{method:request.method,headers,body,cache:"no-store",signal:backup && path.startsWith("backups/") ? request.signal : AbortSignal.timeout(path.startsWith("rooms/")&&(path.endsWith("/start")||path.endsWith("/more"))?65000:path==="title-batch"?25000:path.startsWith("me/season-progress/")?15000:6500)});
+    const result=await fetch(base+"/"+path+(backup?"":url.search),{method:request.method,headers,body,cache:"no-store",signal:backup && path.startsWith("backups/") ? request.signal : AbortSignal.timeout(path.startsWith("rooms/")&&(path.endsWith("/start")||path.endsWith("/more"))?65000:path==="title-batch"?25000:/^me\/(?:season|series)-progress\//.test(path)?15000:6500)});
     return new Response(result.body,{status:result.status,headers:{...(backup && result.headers.has("content-disposition")?{"Content-Disposition":result.headers.get("content-disposition")!}:{}),"Content-Type":result.headers.get("content-type")??"application/json","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
   } catch {
     return Response.json({message:"Serviço temporariamente indisponível. Tente novamente."},{status:503});

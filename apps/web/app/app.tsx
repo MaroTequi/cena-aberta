@@ -50,6 +50,13 @@ const demoEpisodeRatings=[
   {viewer:"Rafael",episode:1,rating:6},{viewer:"Bia",episode:2,rating:10},
   {viewer:"Diego",episode:3,rating:7},
 ];
+function CompleteStatus({complete,requirement}:{complete:boolean;requirement:string}) {
+  return <span className="season-watch-status" role="status" data-complete={complete}>
+    <Icon kind="watched" active={complete}/>
+    {complete?"Vi completamente":<span><strong>Vi completamente</strong><small className="completion-requirement">{requirement}</small></span>}
+  </span>;
+}
+
 function CommunityScore({average,count,demo=false,episodic=false}:{average:number|null;count:number;demo?:boolean;episodic?:boolean}) {
   return <div className="community-score">
     <div className="community-score-value"><strong>{average===null?"–":average.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:2})}</strong><span> / 5</span></div>
@@ -383,7 +390,18 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       .catch(error=>{if(current)setProgressError((error as Error).message);});
     return ()=>{current=false;};
   },[seasonProgressPath,data,progressRetry]);
-  const complete=!!seasonProgress&&seasonProgress.total>0&&seasonProgress.watched===seasonProgress.total;
+  const [seriesComplete,setSeriesComplete]=useState<boolean|"unavailable"|null>(null);
+  const seriesId=title?.format==="tv"?title.id:null;
+  useEffect(()=>{
+    setSeriesComplete(null);
+    if(!seriesId||!data?.profile)return;
+    let active=true;
+    api<{complete:boolean}>("me/series-progress/"+seriesId)
+      .then(result=>{if(active)setSeriesComplete(result.complete);})
+      .catch(()=>{if(active)setSeriesComplete("unavailable");});
+    return ()=>{active=false;};
+  },[seriesId,data]);
+  const seasonComplete=seasonProgress?.rewatched&&!progressError;
   const seriesScore=rankedSeries.find(item=>item.title===title?.id);
   const entry=data?.library?.find(item=>item.title===title?.id)??empty;
   const current=other??data;
@@ -492,19 +510,16 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       </nav>}
       <div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{seriesPart?(seasonName(seriesPart.season)+(seriesPart.episode===undefined?"":" · Episódio "+seriesPart.episode)):(workKind(title).toLocaleUpperCase("pt-BR")+" · "+(title.year||"ANO INDISPONÍVEL"))}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
       {data?.profile&&<><div className="row">
-        {title.format==="seas"?<div className="row season-progress-actions">
-          <span className="season-watch-status"><Icon kind="watched" active={entry.watched}/>{entry.watched?"Já vi":"Ainda não vi"}</span>
-          <button type="button" className={complete?"":"primary"} disabled={busy||!seasonProgress?.total||complete||!!progressError}
-            onClick={()=>{if(seasonProgressPath)void action(async()=>{
-              setSeasonProgress(await api<SeasonProgress>(seasonProgressPath,"PUT",{}));
-            },"Temporada marcada como vista completamente.");}}>
-            {complete?"✓ Vi completamente":"Vi completamente"}
-          </button>
-        </div>:<IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>}
+        {title.format==="seas"?
+          <span className="season-watch-status"><Icon kind="watched" active={entry.watched}/>{entry.watched?"Já vi":"Ainda não vi"}</span>:
+          <IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>}
+        {title.format==="seas"&&seasonProgress&&!progressError&&<CompleteStatus complete={!!seasonComplete} requirement="Duas sessões de cada episódio"/>}
+        {title.format==="tv"&&typeof seriesComplete==="boolean"&&<CompleteStatus complete={seriesComplete} requirement="Duas sessões de cada episódio ou de cada temporada"/>}
+        {title.format==="tv"&&seriesComplete==="unavailable"&&<span className="muted" role="status">Não foi possível verificar se você viu a série completamente.</span>}
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}
         {title.format==="seas"?<span className="season-watch-status" role="status" data-complete={!!seasonProgress?.rewatched}>
           <Icon kind="rewatching" active={!!seasonProgress?.rewatched}/>
-          {seasonProgress?.rewatched?"Vi novamente":"Vi novamente após duas sessões de cada episódio"}
+          {seasonProgress?.rewatched?"Vi novamente":"Ainda não revi"}
         </span>:entry.watched&&<IconAction kind="rewatching" active={entry.rewatching} disabled={busy} label={entry.rewatching?"Vi novamente":"Sem revisualização"} onClick={()=>{void update("rewatching",{value:!entry.rewatching});}}/>}
         {(entry.watched||seasonProgress?.rewatched)&&<button
           disabled={busy||(title.format==="seas"?!seasonProgress?.rewatched:!entry.rewatching)}
