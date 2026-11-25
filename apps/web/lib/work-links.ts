@@ -20,6 +20,12 @@ export function seasonHref(seriesId:string,season:number) {
   return "/obra/"+encodeURIComponent(seriesId)+"/temporadas/"+season;
 }
 
+export const rankingTabs = [
+  {id:"movie",label:"Filmes",boards:[["movie","Ranking de filmes"]]},
+  {id:"tv",label:"Séries",boards:[["tv","Ranking de séries"],["ep","Ranking de episódios de séries"]]},
+  {id:"anime",label:"Animes",boards:[["anime","Ranking de animes"],["anime-ep","Ranking de episódios de animes"]]},
+] as const;
+
 export const rankingGroups = [
   ["movie","Filmes"],
   ["tv","Séries"],
