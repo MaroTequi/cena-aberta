@@ -19,3 +19,16 @@ export function seasonName(number:number) {
 export function seasonHref(seriesId:string,season:number) {
   return "/obra/"+encodeURIComponent(seriesId)+"/temporadas/"+season;
 }
+
+export const rankingGroups = [
+  ["movie","Filmes"],
+  ["tv","Séries"],
+  ["ep","Episódios de séries"],
+  ["anime","Animes"],
+  ["anime-ep","Episódios de animes"],
+] as const;
+
+export function rankingGroup(work:{format:string;anime:boolean}) {
+  if(work.format==="ep")return work.anime?"anime-ep":"ep";
+  return work.anime?"anime":work.format;
+}

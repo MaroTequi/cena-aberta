@@ -200,6 +200,10 @@ try {
   assert.deepEqual(await request(social,episodePath,{user:"demo_second_user"}),[]);
   const episodeId="ep-demo-mare-alta-s1-e1";
   assert.equal((await request(catalog,"/titles/"+episodeId)).name,"Piloto");
+  const animeEpisodeId="ep-demo-neon-norte-s1-e1";
+  const episodeKinds=await request(catalog,"/title-batch?ids="+episodeId+","+animeEpisodeId);
+  assert.equal(episodeKinds.find(item=>item.id===episodeId).anime,false);
+  assert.equal(episodeKinds.find(item=>item.id===animeEpisodeId).anime,true);
   const episodeEntry=(await request(social,"/me?title="+episodeId)).library.find(item=>item.title===episodeId);
   assert.equal(episodeEntry.rating,7);
   assert.equal(episodeEntry.watched,true);
@@ -669,6 +673,8 @@ try {
   assert.equal(episodeCommunity.reviews[0].spoiler,true);
   assert((await episodeApi("diary?page=1&title="+episodeId)).items.length);
   assert((await episodeApi("me/ranking/"+episodeId,"PUT",{tier:2})).items.some(item=>item.title===episodeId&&item.tier===2));
+  await episodeApi("me/library/"+animeEpisodeId+"/watched","PUT",{value:true});
+  assert((await episodeApi("me/ranking/"+animeEpisodeId,"PUT",{tier:2})).items.some(item=>item.title===animeEpisodeId&&item.tier===2));
   console.log("Episódio: página autenticada, avaliação, resenha com spoiler, Diário e ranking verificados.");
 
   const roomResponse=await fetch(web+"/api/v1/rooms",{method:"POST",headers:finalHeaders,body:JSON.stringify({name:"Segunda rodada teste"})});assert.equal(roomResponse.status,200);

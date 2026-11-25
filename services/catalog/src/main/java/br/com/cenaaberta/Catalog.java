@@ -472,7 +472,7 @@ public class Catalog {
             .orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));
         var series=detail(seriesId);
         String name=episode.name().isBlank()?"Episódio "+number:episode.name();
-        return storeSeriesPart(new Title(id,"ep",false,name,series.name(),series.year(),episode.summary(),episode.still()));
+        return storeSeriesPart(new Title(id,"ep",series.anime(),name,series.name(),series.year(),episode.summary(),episode.still()));
     }
 
     private Title storeSeriesPart(Title title) {
