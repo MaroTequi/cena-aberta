@@ -424,3 +424,7 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 .work-detail-heading{align-items:center}
 .work-completion-badge{display:inline-flex;align-items:center;gap:6px;margin-inline-start:auto;padding:5px 10px;border:1px solid var(--accent);border-radius:999px;background:color-mix(in srgb,var(--accent) 12%,var(--panel));color:var(--text);font-size:.78rem;font-weight:700}
 .work-completion-badge svg{width:17px;height:17px;flex:none;color:var(--accent)}
+.watch-guides{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:1.5rem}
+.watch-guides ul{list-style:none;margin:0;padding:0}
+.watch-guides li{padding:.65rem 0;border-top:1px solid var(--line)}
+.watch-guides small{display:block;color:var(--muted)}
