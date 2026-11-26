@@ -1,5 +1,5 @@
 const consentKey = "cena.preference-storage";
-const keys = ["cena-theme", "cenaaberta.rating-control"] as const;
+const keys = ["cena-theme", "cena-christmas", "cenaaberta.rating-control"] as const;
 type PreferenceKey = typeof keys[number];
 type Duration = "persistent" | "session" | "memory";
 type StorageKind = "localStorage" | "sessionStorage";

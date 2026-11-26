@@ -1,0 +1,42 @@
+:root[data-christmas="on"] {
+  --bg: #101b19;
+  --header: #142b25;
+  --panel: #1c2b29;
+  --accent: #f5cf83;
+  --holiday-glow: #365d462e;
+  --holiday-wire: #849a76;
+  --holiday-red: #ee7b74;
+  --holiday-green: #8cc9a1;
+  --holiday-gold: #f8cd78;
+}
+:root[data-christmas="on"][data-theme="light"] {
+  --bg: #f8f5ee;
+  --header: #edf3e9;
+  --panel: #fffdf8;
+  --accent: #765019;
+  --holiday-glow: #9eba8b30;
+  --holiday-wire: #63836b;
+  --holiday-red: #af3f48;
+  --holiday-green: #367454;
+  --holiday-gold: #ae781e;
+}
+:root[data-christmas="on"] body {
+  background-image: radial-gradient(ellipse at top right, var(--holiday-glow), transparent 65%);
+  background-size: 100% 26rem;
+  background-repeat: no-repeat;
+}
+:root[data-christmas="on"] body::before {
+  content: "";
+  display: block;
+  height: 18px;
+  background-color: var(--header);
+  background-image:
+    radial-gradient(ellipse 3px 4px at 12px 9px, var(--holiday-red) 85%, transparent),
+    radial-gradient(ellipse 3px 4px at 42px 12px, var(--holiday-gold) 85%, transparent),
+    radial-gradient(ellipse 3px 4px at 72px 9px, var(--holiday-green) 85%, transparent),
+    radial-gradient(ellipse 46px 8px at 42px 0, transparent 87%, var(--holiday-wire) 91% 98%, transparent);
+  background-size: 90px 18px;
+}
+:root[data-christmas="on"] .logo .mark {color: var(--holiday-red)}
+.christmas-option {display:flex;align-items:center;gap:.55rem;min-height:44px;width:fit-content;cursor:pointer}
+.christmas-option input {width:1.15rem;height:1.15rem;accent-color:var(--accent)}
