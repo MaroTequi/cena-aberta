@@ -436,3 +436,19 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
  .top .nav>.account{grid-column:2;grid-row:1;justify-self:end}
  .top .nav>nav{grid-column:1/-1;grid-row:2;flex-wrap:wrap}
 }
+
+@media(min-width:651px){
+ .top .nav{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:clamp(12px,1.6vw,24px);width:min(1400px,calc(100% - 40px));min-height:72px}
+ .top .nav>.logo{justify-self:start;white-space:nowrap}
+ .top .nav>nav{justify-content:center;gap:2px}
+ .top .nav>nav>.catalog-desktop-category,.top .nav>nav>.room-nav-link{padding:10px 9px;font-size:.94rem;white-space:nowrap}
+ .top .nav>nav>.catalog-desktop-category,.top .nav>nav>.room-nav-link:not([aria-current=page]){color:var(--text)}
+ .top .nav>nav>.nav-active,.top .nav>nav>.room-nav-link:hover{color:var(--accent)}
+ .top .nav>nav>.catalog-drawer+.room-nav-link{margin-left:8px;border-left:1px solid var(--line);padding-left:16px}
+ .top .nav>.account{justify-self:end;flex-wrap:nowrap}
+}
+@media(min-width:651px) and (max-width:1199px){
+ .top .nav:has(.account-signed-in){grid-template-columns:1fr auto;row-gap:0;padding-top:8px}
+ .top .nav:has(.account-signed-in)>nav{grid-column:1/-1;grid-row:2;justify-content:flex-start;border-top:1px solid var(--line);margin-top:6px;padding-block:3px}
+ .top .nav>.account-signed-in{grid-column:2;grid-row:1}
+}
