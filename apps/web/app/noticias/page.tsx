@@ -1,3 +1,4 @@
+import {EditorialImage} from "../editorial-image";
 import type {Metadata} from "next";
 import "./news.css";
 import {topics,dateFormat,newsFeed} from "./feed";
@@ -14,7 +15,7 @@ export default async function News({searchParams}:{searchParams:Promise<{tema?:s
       </nav>
       {failed.length>0&&<p role="status">Não foi possível carregar {failed.map(s=>s.topic.toLowerCase()+" ("+s.name+")").join(", ")} agora.</p>}
       {!items.length&&!failed.length&&<p>Nenhuma notícia disponível.</p>}
-      {items.map(item=><article className="news-story" key={item.link}><div className="news-byline"><strong>{item.source.topic}</strong><span>{item.source.name}</span><time dateTime={item.date.toISOString()}>{dateFormat.format(item.date)}</time></div>
-        <h2><a href={item.link}>{item.title}</a></h2></article>)}
+      {items.map(item=><article className="editorial-row news-story" key={item.link}><EditorialImage src={item.image} topic={item.source.topic}/><div><div className="news-byline"><strong>{item.source.topic}</strong><span>{item.source.name}</span><time dateTime={item.date.toISOString()}>{dateFormat.format(item.date)}</time></div>
+        <h2><a href={item.link}>{item.title}</a></h2></div></article>)}
     </main></>;
 }

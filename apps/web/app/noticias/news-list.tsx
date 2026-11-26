@@ -1,7 +1,8 @@
 "use client";
+import {EditorialImage} from "../editorial-image";
 import {useLayoutEffect,useRef,useState} from "react";
 
-type Item={topic:string;source:string;title:string;link:string;date:string;iso:string};
+type Item={topic:string;source:string;title:string;link:string;date:string;iso:string;image?:string};
 export function NewsList({topics,failed,items}:{topics:string[];failed:{topic:string;name:string}[];items:Item[]}){
   const [topic,setTopic]=useState("Todos");
   const list=useRef<HTMLDivElement>(null);
@@ -27,8 +28,8 @@ export function NewsList({topics,failed,items}:{topics:string[];failed:{topic:st
     {unavailable.length>0&&<p role="status">Notícias indisponíveis agora em {unavailable.map(s=>s.topic+" ("+s.name+")").join(", ")}.</p>}
     {!visible.length&&!unavailable.length&&<p>Nenhuma notícia disponível.</p>}
     {visible.length>0&&<div ref={list} className="landing-news-list" role="region" aria-label={"Manchetes · "+topic} tabIndex={0}>
-      {visible.map(item=><article key={item.link}><small>{item.topic} · {item.source} · <time dateTime={item.iso}>{item.date}</time></small>
-        <h3><a href={item.link}>{item.title}</a></h3></article>)}
+      {visible.map(item=><article className="editorial-row" key={item.link}><EditorialImage src={item.image} topic={item.topic}/><div><small>{item.topic} · {item.source} · <time dateTime={item.iso}>{item.date}</time></small>
+        <h3><a href={item.link}>{item.title}</a></h3></div></article>)}
     </div>}
   </>;
 }

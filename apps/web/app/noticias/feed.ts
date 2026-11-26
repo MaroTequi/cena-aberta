@@ -9,8 +9,8 @@ const sources=[
 ] as const;
 export const topics=Array.from(new Map(sources.map(s=>[s.slug,{slug:s.slug,topic:s.topic}])).values());
 type Source=typeof sources[number];
-type Article={source:Source;title:string;link:string;date:Date};
-type Post={title?:{rendered?:string};link?:string;date_gmt?:string};
+type Article={source:Source;title:string;link:string;image?:string;date:Date};
+type Post={title?:{rendered?:string};link?:string;date_gmt?:string;_embedded?:{'wp:featuredmedia'?:{source_url?:string;media_details?:{sizes?:{medium?:{source_url?:string}}}}[]}};
 export const dateFormat=new Intl.DateTimeFormat("pt-BR",{day:"numeric",month:"short",year:"numeric",timeZone:"America/Sao_Paulo"});
 const entities:Record<string,string>={amp:"&",quot:'"',apos:"'",lt:"<",gt:">",nbsp:" ",hellip:"…",ndash:"–",mdash:"—",rsquo:"’",lsquo:"‘",ldquo:"“",rdquo:"”"};
 function headline(value:string){
@@ -21,7 +21,7 @@ function headline(value:string){
   }).trim();
 }
 async function articles(source:Source):Promise<Article[]>{
-  const response=await fetch("https://"+source.host+"/wp-json/wp/v2/posts?"+source.query+"&orderby=date&order=desc&per_page=12&_fields=link,title,date_gmt",{
+  const response=await fetch("https://"+source.host+"/wp-json/wp/v2/posts?"+source.query+"&orderby=date&order=desc&per_page=12&_embed=wp:featuredmedia&_fields=link,title,date_gmt,_links,_embedded",{
     next:{revalidate:1800},headers:{"User-Agent":"CenaAberta/1.0"},redirect:"error",signal:AbortSignal.timeout(8000)
   });
   if(!response.ok)throw new Error("Fonte indisponível");
@@ -33,7 +33,9 @@ async function articles(source:Source):Promise<Article[]>{
     const date=new Date(post.date_gmt+"Z");
     if(url?.origin!=="https://"+source.host||url.username||url.password||!Number.isFinite(date.getTime()))continue;
     const title=headline(post.title.rendered);
-    if(title)result.push({source,title,link:url.href,date});
+    const media=post._embedded?.['wp:featuredmedia']?.[0];
+    const image=URL.parse(media?.media_details?.sizes?.medium?.source_url??media?.source_url??'');
+    if(title)result.push({source,title,link:url.href,date,image:image?.protocol==='https:'?image.href:undefined});
   }
   return result;
 }
