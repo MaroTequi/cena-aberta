@@ -397,6 +397,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
   const seasonComplete=seasonProgress?.complete&&!progressError;
   const seriesScore=rankedSeries.find(item=>item.title===title?.id);
   const entry=data?.library?.find(item=>item.title===title?.id)??empty;
+  const anyEpisodeWatched=seasonProgress?seasonProgress.watched>0:entry.watched;
   const current=other??data;
   const owned=!other||other.profile?.username===data?.profile?.username;
   function sectionVisibility(section:Section|"all",label:string){
@@ -508,7 +509,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
       <div className="detail-grid"><Poster title={title} large/><div><p className="eyebrow">{seriesPart?(seasonName(seriesPart.season)+(seriesPart.episode===undefined?"":" · Episódio "+seriesPart.episode)):(workKind(title).toLocaleUpperCase("pt-BR")+" · "+(title.year||"ANO INDISPONÍVEL"))}</p><h2>{title.name}</h2><p>{title.summary||"Sinopse indisponível."}</p><FilmFacts title={title}/>
       {data?.profile&&<><div className="row">
         {title.format==="seas"?
-          <span className="season-watch-status"><Icon kind="watched" active={entry.watched}/>{entry.watched?"Já vi":"Ainda não vi"}</span>:
+          !seasonComplete&&<span className="season-watch-status"><Icon kind="watched" active={anyEpisodeWatched}/>{anyEpisodeWatched?"Já vi":"Ainda não vi"}</span>:
           <IconAction kind="watched" active={entry.watched} disabled={busy||reviewPending} label={entry.watched?"Já vi":"Não vi"} onClick={()=>{void update("watched",{value:!entry.watched});}}/>}
         {title.format==="tv"&&seriesComplete==="unavailable"&&<span className="muted" role="status">Não foi possível verificar se você viu a série completamente.</span>}
         {(!entry.watched||entry.interest)&&<IconAction kind="interest" active={entry.interest} disabled={busy} label={entry.interest?"No Vou ver":"Vou ver"} onClick={()=>{void update("interest",{value:!entry.interest});}}/>}

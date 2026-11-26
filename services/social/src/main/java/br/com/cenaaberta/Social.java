@@ -334,26 +334,22 @@ public class Social {
         if(seasons.isEmpty())return Map.of("complete",false);
 
         String episodePrefix="ep-"+series+"-s";
-        var watchedAndRated=new HashSet<>(db.queryForList("""
-            select title from library where actor=? and watched=true and rating is not null and title like ?
-            """,String.class,actor,episodePrefix+"%"));
+        var watched=watchedEpisodes(actor,episodePrefix);
         var seasonPrefixes=seasons.stream().map(season->episodePrefix+season+"-e").toList();
-        if(seasonPrefixes.stream().anyMatch(prefix->watchedAndRated.stream().noneMatch(id->id.startsWith(prefix))))
+        if(seasonPrefixes.stream().anyMatch(prefix->watched.stream().noneMatch(id->id.startsWith(prefix))))
             return Map.of("complete",false);
 
         return Map.of("complete",seasons.stream().allMatch(season->
-            allEpisodesMatch(episodePrefix+season+"-e",seasonEpisodes(series,season),watchedAndRated)));
+            allEpisodesMatch(episodePrefix+season+"-e",seasonEpisodes(series,season),watched)));
     }
 
     private SeasonProgress seasonProgress(String actor,String series,int season,Set<Integer> episodes) {
         String prefix="ep-"+series+"-s"+season+"-e";
         var watched=watchedEpisodes(actor,prefix);
         int count=(int)episodes.stream().filter(number->watched.contains(prefix+number)).count();
-        var ratings=db.query("select episode,rating from episode_rating where actor=? and title=? and season=?",
-            (row,index)->Map.entry(row.getInt("episode"),row.getInt("rating")),actor,series,season);
-        var rated=ratings.stream().map(Map.Entry::getKey).collect(java.util.stream.Collectors.toSet());
-        boolean complete=!episodes.isEmpty()&&count==episodes.size()&&rated.containsAll(episodes);
-        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Map.Entry::getValue).sum(),ratings.size()),
+        var ratings=db.queryForList("select rating from episode_rating where actor=? and title=? and season=?",Integer.class,actor,series,season);
+        boolean complete=!episodes.isEmpty()&&count==episodes.size();
+        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()),
             seasonRewatched(actor,prefix,episodes),complete);
     }
 

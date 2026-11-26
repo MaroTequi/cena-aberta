@@ -646,6 +646,7 @@ try {
   await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:true});
   assert.equal(await seasonWatched(),true);
   assert.equal((await episodeApi(progressPath)).watched,1);
+  assert.equal((await episodeApi(progressPath)).complete,false);
   assert.equal((await putSeason("me/ranking/"+seasonId,{tier:2})).status,400);
   await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:false});
   assert.equal(await seasonWatched(),false);
@@ -655,7 +656,7 @@ try {
   await episodeApi("me/library/"+otherEpisode+"/watched","PUT",{value:true});
   const secondDiary="diary?page=1&title="+otherEpisode;
   assert.equal((await episodeApi(secondDiary)).items.length,1);
-  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:null,rewatched:false,complete:false});
+  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:null,rewatched:false,complete:true});
   const seriesProgressPath="me/series-progress/demo-mare-alta";
   assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
   assert.equal((await putSeason(seasonLibrary+"rewatching",{value:true})).status,400);
@@ -667,7 +668,7 @@ try {
   };
   await registerRewatch(seasonId,409);
   await episodeApi("me/library/"+episodeId+"/rating","PUT",{rating:5});
-  assert.equal((await episodeApi(progressPath)).complete,false);
+  assert.equal((await episodeApi(progressPath)).complete,true);
   await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:6});
   assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5,rewatched:false,complete:true});
   assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
@@ -681,7 +682,7 @@ try {
   await registerRewatch(seasonId);
   const episodeTwo="ep-demo-mare-alta-s2-e1";
   await episodeApi("me/library/"+episodeTwo+"/watched","PUT",{value:true});
-  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
   await episodeApi("me/library/"+episodeTwo+"/rating","PUT",{rating:8});
   assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
   const deletion=await fetch(web+"/api/v1/me/viewings/"+secondRewatch.id,{method:"DELETE",headers:finalHeaders});
@@ -689,8 +690,8 @@ try {
   assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5,rewatched:false,complete:true});
   assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
   await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:null});
-  assert.equal((await episodeApi(progressPath)).complete,false);
-  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  assert.equal((await episodeApi(progressPath)).complete,true);
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
   await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:6});
   await episodeApi("me/library/"+otherEpisode+"/watched","PUT",{value:false});
   assert.equal((await episodeApi(progressPath)).complete,false);
