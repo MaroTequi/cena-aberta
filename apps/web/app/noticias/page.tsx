@@ -1,3 +1,4 @@
+import {EditorialLinks} from "../editorial-links";
 import {EditorialImage} from "../editorial-image";
 import type {Metadata} from "next";
 import "./news.css";
@@ -8,7 +9,7 @@ export default async function News({searchParams}:{searchParams:Promise<{tema?:s
   const {tema}=await searchParams;
   const selected=topics.find(s=>s.slug===tema);
   const {items,failed}=await newsFeed(selected?.slug);
-  return <><header className="top"><div className="wrap nav"><a className="logo" href="/"><span className="mark">◈</span> cena<span>aberta</span></a></div></header>
+  return <><header className="top"><div className="wrap nav"><a className="logo" href="/"><span className="mark">◈</span> cena<span>aberta</span></a><nav aria-label="Navegação principal"><EditorialLinks onNewsPage/></nav></div></header>
     <main className="wrap news-page"><h1>Notícias</h1>
       <nav className="news-topics" aria-label="Filtrar notícias por tema"><a href="/noticias" aria-current={!selected?"page":undefined}>Todas</a>
         {topics.map(s=><a key={s.slug} href={"/noticias?tema="+s.slug} aria-current={selected===s?"page":undefined}>{s.topic}</a>)}

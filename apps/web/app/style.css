@@ -430,3 +430,9 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 .watch-guides small{display:block;color:var(--muted)}
 .editorial-row{display:grid;grid-template-columns:clamp(4rem,9vw,6rem) minmax(0,1fr);gap:.8rem;align-items:center}
 .editorial-image{display:block;width:100%;height:auto;aspect-ratio:24/17;object-fit:cover;border-radius:6px;background:var(--line)}
+
+@media(max-width:650px){
+ .top .nav .logo{grid-column:1;grid-row:1;justify-self:start}
+ .top .nav>.account,.top .nav>.account:not(.account-signed-in){grid-column:2;grid-row:1;justify-self:end}
+ .top .nav>nav{grid-column:1/-1;grid-row:2;flex-wrap:wrap}
+}

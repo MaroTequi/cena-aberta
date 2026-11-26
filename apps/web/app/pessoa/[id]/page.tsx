@@ -1,3 +1,4 @@
+import {EditorialLinks} from "../../editorial-links";
 import {getServerSession} from "next-auth";
 import {notFound,redirect} from "next/navigation";
 import {authOptions} from "../../../lib/auth";
@@ -23,7 +24,7 @@ export default async function PersonPage({params,searchParams}:{params:Promise<{
   }).catch(()=>null);
   if(response?.status===404)notFound();
   const person:Person|null=response?.ok?await response.json():null;
-  return <><header className="top"><div className="wrap nav"><a className="logo" href="/"><span className="mark">◈</span> cena<span>aberta</span></a></div></header>
+  return <><header className="top"><div className="wrap nav"><a className="logo" href="/"><span className="mark">◈</span> cena<span>aberta</span></a><nav aria-label="Navegação principal"><EditorialLinks/></nav></div></header>
     <main className="wrap person-page"><a className="person-back" href={back}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>Voltar</a>
     {!person?<p role="status">Não foi possível carregar a ficha desta pessoa. <a href={"?"+(back==="/"?"":"obra="+obra)}>Tentar novamente</a></p>:<>
       <section className="person-intro"><Portrait name={person.name} photo={person.photo}/><div><h1>{person.name}</h1>

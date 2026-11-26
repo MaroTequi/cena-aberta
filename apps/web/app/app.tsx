@@ -1,4 +1,5 @@
 "use client";
+import {EditorialLinks} from "./editorial-links";
 import {WatchGuides} from "./watch-guides";
 import {NotificationBell} from "./notification-bell";
 import {useCallback,useEffect,useRef,useState,type ReactNode} from "react";
@@ -433,6 +434,7 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
           <CatalogDrawer categories={categories.map(([id,name])=>[id,id==="all"?"Explorar":name])} current={tab} onSelect={changeTab}/>
         </>}
         <Link className="room-nav-link" href="/resenhas" aria-current={tab==="reviews"?"page":undefined}>Resenhas</Link>
+        <EditorialLinks/>
         {authenticated&&<a className="room-nav-link" href="/salas"><UiIcon name="card"/>Sélete</a>}
       </nav>
       <div className={authenticated?"account account-signed-in":"account"}>
