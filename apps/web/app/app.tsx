@@ -255,7 +255,7 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
   const refresh=useCallback(async()=>{const value=await api<Dashboard>(pageTitle?"me?title="+encodeURIComponent(pageTitle):tab==="ranking"?"me":"me?summary=true");setData(value);return value;},[pageTitle,tab==="ranking"]);
   useEffect(()=>{if(authenticated) refresh().catch(fail);},[authenticated,refresh]);
   useEffect(()=>{
-    if(!authenticated || tab==="profile" || tab==="ranking" || tab==="reviews" || pageTitle) return;
+    if(!authenticated || tab==="profile" || tab==="ranking" || tab==="reviews" || tab==="recommendations" || pageTitle) return;
     let current=true;
     setLoading(true);
     const params=new URLSearchParams({type:tab,query:search,page:String(page)});
@@ -342,7 +342,7 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
     </fieldset>;
   }
   function closeTitle(){openSequence.current++;setTitle(null);if(pageTitle)router.push("/");}
-  function changeTab(next:string){if(pageTitle||tab==="ranking"||tab==="reviews"){router.push(next==="all"?"/":"/?aba="+next);return;}setTab(next);setPage(1);closeTitle();setError("");setNotice("");setOther(null);}
+  function changeTab(next:string){if(pageTitle||tab==="ranking"||tab==="reviews"||tab==="recommendations"){router.push(next==="all"?"/":"/?aba="+next);return;}setTab(next);setPage(1);closeTitle();setError("");setNotice("");setOther(null);}
   function update(kind:string,body:unknown) {
     if(!title)return;
     return action(async()=>{await api("me/library/"+title.id+"/"+kind,"PUT",body);if(["review","rating","visibility"].includes(kind)&&data?.profile)setCommunity(await api<Community>("titles/"+title.id+"/community"));},"Alteração salva.");
@@ -434,7 +434,7 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
           {categories.map(([id,name])=><button key={id} className={(tab===id?"nav-active ":"")+"catalog-desktop-category"} onClick={()=>changeTab(id)}>{name}</button>)}
         </>}
         <Link className="room-nav-link" href="/resenhas" aria-current={tab==="reviews"?"page":undefined}>Resenhas</Link>
-        <EditorialLinks/>
+        <EditorialLinks onRecommendationsPage={tab==="recommendations"}/>
         {authenticated&&<a className="room-nav-link" href="/salas"><UiIcon name="card"/>Sélete</a>}
       </nav>
       <div className={authenticated?"account account-signed-in":"account"}>
@@ -466,7 +466,7 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
     <main className="wrap">
       {error&&<p role="alert" className="message error">{error}{(tab==="profile"||tab==="ranking")&&<button className="small" onClick={()=>{setError("");setTitleRetry(n=>n+1);}}>Tentar carregar os cards novamente</button>}</p>}{notice&&<p role="status" className="message">{notice}</p>}
       {pageTitle&&!title&&!error&&<p role="status">Carregando detalhes da obra…</p>}
-      {tab==="reviews"?monthlyReviews:!authenticated?<Landing monthlyReviews={<>{monthlyReviews}<WatchGuides/>{exploreNews}</>} releases={releases} actions={<>{emailAccounts&&<><a className="primary account-link" href="/conta?modo=register">Criar conta</a><a className="account-link landing-login" href="/conta">Já tenho conta</a></>}{inviteLogin&&<button className="primary" onClick={()=>signIn("keycloak",{callbackUrl:"/"})}>Entrar com convite</button>}</>}/>:<>
+      {tab==="recommendations"?<WatchGuides standalone/>:tab==="reviews"?monthlyReviews:!authenticated?<Landing monthlyReviews={<>{monthlyReviews}<WatchGuides/>{exploreNews}</>} releases={releases} actions={<>{emailAccounts&&<><a className="primary account-link" href="/conta?modo=register">Criar conta</a><a className="account-link landing-login" href="/conta">Já tenho conta</a></>}{inviteLogin&&<button className="primary" onClick={()=>signIn("keycloak",{callbackUrl:"/"})}>Entrar com convite</button>}</>}/>:<>
 
         {data?.needsProfile&&<section className="panel"><h2>Crie seu perfil</h2><ProfileForm busy={busy} onSave={saveProfile}/></section>}
         {!pageTitle&&(tab==="ranking"?(data?.profile&&<FilmRanking visibility={sectionVisibility("ranking","meu ranking")} films={(data.library??[]).filter(item=>item.watched&&known[item.title]).map(item=>known[item.title])}/>):tab!=="profile"?<>

@@ -9,12 +9,13 @@ const guides = [
   {category: "Animes", source: "Omelete", title: "Seis animes para quem gostou de Solo Leveling", image: "https://cdn.ome.lt/8OlmaNv_91jcHo1khZwHmIc0pYI=/1200x630/smart/filters:format(webp)/extras/conteudos/Captura_de_tela_2025-04-17_093547.png", href: "https://www.omelete.com.br/mangas-animes/animes-para-quem-curtiu-solo-leveling"},
 ];
 
-export function WatchGuides() {
+export function WatchGuides({standalone=false}:{standalone?:boolean}) {
+  const CategoryHeading=standalone?"h2":"h3";
   return <section className="panel" aria-labelledby="watch-guides-title">
-    <h2 id="watch-guides-title">Recomendações</h2>
+    {standalone?<h1 id="watch-guides-title">Recomendações</h1>:<h2 id="watch-guides-title"><a href="/recomendacoes">Recomendações</a></h2>}
     <div className="watch-guides">
       {["Filmes", "Séries", "Animes"].map(category => <div key={category}>
-        <h3>{category}</h3>
+        <CategoryHeading>{category}</CategoryHeading>
         <ul>{guides.filter(guide => guide.category === category).map(guide =>
           <li key={guide.href}><a className="editorial-row" href={guide.href}><EditorialImage topic={guide.category} src={guide.image}/><span>{guide.title}<small>{guide.source}</small></span></a></li>
         )}</ul>
