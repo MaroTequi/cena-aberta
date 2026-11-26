@@ -13,5 +13,9 @@ export default async function Page({searchParams}:{searchParams:Promise<{aba?:st
   if(session?.actor)await requireProfile(session.actor);
   const initialTab=query.usuario?"profile":["all","movie","tv","anime","profile"].includes(query.aba??"")?query.aba!:"all";
   const releases=session?.actor?[]:await recentReleases();
-  return <App monthlyReviews={<><Suspense fallback={<p role="status">Carregando resenhas…</p>}><MonthlyReviews viewer={session?.actor}/></Suspense>{!session?.actor&&<Suspense fallback={<p role="status">Carregando notícias…</p>}><LandingNews/></Suspense>}</>} releases={releases} authenticated={Boolean(session?.actor)} inviteLogin={Boolean(process.env.OIDC_ISSUER)} emailAccounts={emailAccounts} initialTab={initialTab} profileUser={query.usuario}/>;
+  return <App
+    monthlyReviews={!session?.actor&&<Suspense fallback={<p role="status">Carregando resenhas…</p>}><MonthlyReviews/></Suspense>}
+    exploreNews={<Suspense fallback={<p role="status">Carregando notícias…</p>}><LandingNews/></Suspense>}
+    releases={releases} authenticated={Boolean(session?.actor)} inviteLogin={Boolean(process.env.OIDC_ISSUER)}
+    emailAccounts={emailAccounts} initialTab={initialTab} profileUser={query.usuario}/>;
 }

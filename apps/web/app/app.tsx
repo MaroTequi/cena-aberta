@@ -221,7 +221,7 @@ function ReviewReader({name,titleId,author,own,watched,text,version,initial}:{
     </dialog>
   </>;
 }
-export function App({chronology,monthlyReviews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false,seriesPart}:{seriesPart?:{seriesId:string;season:number;episode?:number};chronology?:ReactNode;monthlyReviews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
+export function App({chronology,monthlyReviews,exploreNews,releases=[],authenticated,inviteLogin,emailAccounts,pageTitle,initialTab="all",profileUser,showCommunityDemo=false,seriesPart}:{seriesPart?:{seriesId:string;season:number;episode?:number};chronology?:ReactNode;monthlyReviews?:ReactNode;exploreNews?:ReactNode;releases?:Release[];authenticated:boolean;inviteLogin:boolean;emailAccounts:boolean;pageTitle?:string;initialTab?:string;profileUser?:string;showCommunityDemo?:boolean}) {
   const router=useRouter();
   const [tab,setTab]=useState(initialTab),[query,setQuery]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1);
   const [titles,setTitles]=useState<Title[]>([]),[known,setKnown]=useState<Record<string,Title>>({}),[more,setMore]=useState(false),[demo,setDemo]=useState(false);
@@ -253,7 +253,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
   const refresh=useCallback(async()=>{const value=await api<Dashboard>(pageTitle?"me?title="+encodeURIComponent(pageTitle):tab==="ranking"?"me":"me?summary=true");setData(value);return value;},[pageTitle,tab==="ranking"]);
   useEffect(()=>{if(authenticated) refresh().catch(fail);},[authenticated,refresh]);
   useEffect(()=>{
-    if(!authenticated || (tab==="profile"||tab==="ranking") || pageTitle) return;
+    if(!authenticated || tab==="profile" || tab==="ranking" || tab==="reviews" || pageTitle) return;
     let current=true;
     setLoading(true);
     const params=new URLSearchParams({type:tab,query:search,page:String(page)});
@@ -340,7 +340,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
     </fieldset>;
   }
   function closeTitle(){openSequence.current++;setTitle(null);if(pageTitle)router.push("/");}
-  function changeTab(next:string){if(pageTitle||tab==="ranking"){router.push("/?aba="+next);return;}setTab(next);setPage(1);closeTitle();setError("");setNotice("");setOther(null);}
+  function changeTab(next:string){if(pageTitle||tab==="ranking"||tab==="reviews"){router.push(next==="all"?"/":"/?aba="+next);return;}setTab(next);setPage(1);closeTitle();setError("");setNotice("");setOther(null);}
   function update(kind:string,body:unknown) {
     if(!title)return;
     return action(async()=>{await api("me/library/"+title.id+"/"+kind,"PUT",body);if(["review","rating","visibility"].includes(kind)&&data?.profile)setCommunity(await api<Community>("titles/"+title.id+"/community"));},"Alteração salva.");
@@ -426,7 +426,14 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
   return <>
     <header className="top"><div className="wrap nav">
       <button className="logo" onClick={()=>changeTab("all")}><span className="mark">◈</span> cena<span>aberta</span></button>
-      {authenticated&&<nav aria-label="Catálogo">{categories.map(([id,name])=><button key={id} className={(tab===id?"nav-active ":"")+"catalog-desktop-category"} onClick={()=>changeTab(id)}>{name}</button>)}<CatalogDrawer categories={categories.map(([id,name])=>[id,id==="all"?"Todos":name])} current={tab} onSelect={changeTab}/><a className="room-nav-link catalog-news-link" href="/noticias">Notícias</a><a className="room-nav-link" href="/salas"><UiIcon name="card"/>Sélete</a></nav>}
+      <nav aria-label="Navegação principal">
+        {authenticated&&<>
+          {categories.map(([id,name])=><button key={id} className={(tab===id?"nav-active ":"")+"catalog-desktop-category"} onClick={()=>changeTab(id)}>{name}</button>)}
+          <CatalogDrawer categories={categories.map(([id,name])=>[id,id==="all"?"Explorar":name])} current={tab} onSelect={changeTab}/>
+        </>}
+        <Link className="room-nav-link" href="/resenhas" aria-current={tab==="reviews"?"page":undefined}>Resenhas</Link>
+        {authenticated&&<a className="room-nav-link" href="/salas"><UiIcon name="card"/>Sélete</a>}
+      </nav>
       <div className={authenticated?"account account-signed-in":"account"}>
         {authenticated?<>
           <NotificationBell/>
@@ -456,7 +463,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
     <main className="wrap">
       {error&&<p role="alert" className="message error">{error}{(tab==="profile"||tab==="ranking")&&<button className="small" onClick={()=>{setError("");setTitleRetry(n=>n+1);}}>Tentar carregar os cards novamente</button>}</p>}{notice&&<p role="status" className="message">{notice}</p>}
       {pageTitle&&!title&&!error&&<p role="status">Carregando detalhes da obra…</p>}
-      {!authenticated?<Landing monthlyReviews={monthlyReviews} releases={releases} actions={<>{emailAccounts&&<><a className="primary account-link" href="/conta?modo=register">Criar conta</a><a className="account-link landing-login" href="/conta">Já tenho conta</a></>}{inviteLogin&&<button className="primary" onClick={()=>signIn("keycloak",{callbackUrl:"/"})}>Entrar com convite</button>}</>}/>:<>
+      {tab==="reviews"?monthlyReviews:!authenticated?<Landing monthlyReviews={<>{monthlyReviews}{exploreNews}</>} releases={releases} actions={<>{emailAccounts&&<><a className="primary account-link" href="/conta?modo=register">Criar conta</a><a className="account-link landing-login" href="/conta">Já tenho conta</a></>}{inviteLogin&&<button className="primary" onClick={()=>signIn("keycloak",{callbackUrl:"/"})}>Entrar com convite</button>}</>}/>:<>
 
         {data?.needsProfile&&<section className="panel"><h2>Crie seu perfil</h2><ProfileForm busy={busy} onSave={saveProfile}/></section>}
         {!pageTitle&&(tab==="ranking"?(data?.profile&&<FilmRanking visibility={sectionVisibility("ranking","meu ranking")} films={(data.library??[]).filter(item=>item.watched&&known[item.title]).map(item=>known[item.title])}/>):tab!=="profile"?<>
@@ -466,7 +473,7 @@ export function App({chronology,monthlyReviews,releases=[],authenticated,inviteL
           <section aria-busy={loading}><div className="section-heading"><h2>{search?"Resultados da busca":categories.find(([id])=>id===tab)?.[1]}</h2>{demo&&<span className="muted">Catálogo fictício</span>}</div>
           {loading?<p>Carregando catálogo…</p>:titles.length?<div className="grid">{titles.map(item=><article className="catalog-card" key={item.id}><button className="card" onClick={()=>open(item.id)}><Poster title={item}/><CardTitle>{item.name}</CardTitle><small>{item.year} · {workKind(item)}</small></button></article>)}</div>:<p>Nenhuma obra nesta página.</p>}
           {(page>1||more)&&<div className="row pagination"><button disabled={page===1} onClick={()=>setPage(page-1)}>Anterior</button><span>Página {page}</span><button disabled={!more} onClick={()=>setPage(page+1)}>Próxima</button></div>}</section>
-          {tab==="all"&&!search&&monthlyReviews}
+          {tab==="all"&&!search&&exploreNews}
         </>:<section><div className="section-heading profile-heading"><div className="row">{current?.profile&&<ProfileAvatar name={current.profile.name} avatar={current.profile.avatar}/>}<div><h1>{current?.profile?.name??"Meu perfil"}</h1>{current?.profile&&<span className="muted">@{current.profile.username}</span>}</div></div></div>
           {!owned&&current?.profile&&<ProfileFriend key={current.profile.username} username={current.profile.username}/>}
           {owned&&current?.profile&&<><nav className="profile-shortcuts" aria-label="Atalhos do perfil"><a className="room-nav-button" href="/conta/configuracoes">Minha conta</a><a className="room-nav-button" href="/ranking"><UiIcon name="crown"/>Meu ranking</a><a className="room-nav-button" href="/amigos"><UiIcon name="friends"/>Meus amigos</a><a className="room-nav-button" href="/importar"><UiIcon name="import"/>Importar Letterboxd</a></nav><div className="profile-visibility-all">{sectionVisibility("all","todas as seções")}<span>Visibilidade do perfil<small>Controle cada seção pelo ícone de olho ou use este para mostrar/ocultar todas. Avaliações públicas nas obras continuam com controle próprio.</small></span></div></>}

@@ -361,7 +361,7 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 .monthly-review-author{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .monthly-review-author .profile-avatar{width:28px;height:28px;font-size:.85rem}
 
-@media(max-width:650px){.room-nav-link.catalog-news-link{display:none}}
+.nav nav .room-nav-link[aria-current=page]{border-bottom:1px solid var(--accent)}
 
 .landing-news-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .landing-news-filters button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
