@@ -1,5 +1,6 @@
-export function UiIcon({name}:{name:"card"|"bell"|"room"|"diary"|"review"|"heart"|"next"|"swipe"|"edit"|"crown"|"friends"|"import"|"trash"|"eye"|"hidden"|"clock"|"link"|"back"}){
+export function UiIcon({name}:{name:"card"|"bell"|"room"|"diary"|"review"|"heart"|"next"|"swipe"|"edit"|"crown"|"friends"|"import"|"trash"|"eye"|"hidden"|"clock"|"link"|"back"|"tree"}){
  const paths={
+ tree:<path d="m12 2 5 6h-3l5 6h-4l5 5H4l5-5H5l5-6H7l5-6Zm0 17v3"/>,
  back:<path d="m12 5-7 7 7 7M5 12h14"/>,
  clock:<><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></>,
  link:<><path d="m10 13 4-4m-6 2-2 2a3.5 3.5 0 0 0 5 5l3-3m-4-6 3-3a3.5 3.5 0 1 1 5 5l-2 2"/></>,
