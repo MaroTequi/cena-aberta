@@ -434,7 +434,14 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
 @media(max-width:650px){
  .top .nav .logo{grid-column:1;grid-row:1;justify-self:start}
  .top .nav>.account{grid-column:2;grid-row:1;justify-self:end}
- .top .nav>nav{grid-column:1/-1;grid-row:2;flex-wrap:wrap}
+ .top .nav:has(>.catalog-drawer){grid-template-columns:44px minmax(0,1fr) auto}
+ .top .nav>.catalog-drawer{grid-column:1;grid-row:1}
+ .top .nav .catalog-drawer-trigger{width:44px;justify-content:center}
+ .top .nav:has(>.catalog-drawer)>.logo{grid-column:2;padding:0;white-space:nowrap;font-size:clamp(1rem,4.5vw,1.25rem)}
+ .top .nav>.account-signed-in{grid-column:3}
+ .top .nav>nav{grid-column:1/-1;grid-row:2;display:flex;justify-content:space-around;gap:0;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:2px}
+ .top .nav>nav>.room-nav-link{min-height:44px;padding:6px 3px;justify-content:center}
+ .top .nav>nav>.room-nav-link svg{display:none}
 }
 
 @media(min-width:651px){
@@ -444,7 +451,7 @@ button.notification-bell{position:relative;display:inline-grid;place-items:cente
  .top .nav>nav>.catalog-desktop-category,.top .nav>nav>.room-nav-link{padding:10px 9px;font-size:.94rem;white-space:nowrap}
  .top .nav>nav>.catalog-desktop-category,.top .nav>nav>.room-nav-link:not([aria-current=page]){color:var(--text)}
  .top .nav>nav>.nav-active,.top .nav>nav>.room-nav-link:hover{color:var(--accent)}
- .top .nav>nav>.catalog-drawer+.room-nav-link{margin-left:8px;border-left:1px solid var(--line);padding-left:16px}
+ .top .nav>nav>.catalog-desktop-category+.room-nav-link{margin-left:8px;border-left:1px solid var(--line);padding-left:16px}
  .top .nav>.account{justify-self:end;flex-wrap:nowrap}
 }
 @media(min-width:651px) and (max-width:1199px){

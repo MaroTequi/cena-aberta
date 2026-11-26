@@ -427,11 +427,11 @@ export function App({chronology,monthlyReviews,exploreNews,releases=[],authentic
   }
   return <>
     <header className="top"><div className="wrap nav">
+      {authenticated&&<CatalogDrawer categories={categories.map(([id,name])=>[id,id==="all"?"Explorar":name])} current={tab} onSelect={changeTab}/>}
       <button className="logo" onClick={()=>changeTab("all")}><span className="mark">◈</span> cena<span>aberta</span></button>
       <nav aria-label="Navegação principal">
         {authenticated&&<>
           {categories.map(([id,name])=><button key={id} className={(tab===id?"nav-active ":"")+"catalog-desktop-category"} onClick={()=>changeTab(id)}>{name}</button>)}
-          <CatalogDrawer categories={categories.map(([id,name])=>[id,id==="all"?"Explorar":name])} current={tab} onSelect={changeTab}/>
         </>}
         <Link className="room-nav-link" href="/resenhas" aria-current={tab==="reviews"?"page":undefined}>Resenhas</Link>
         <EditorialLinks/>
