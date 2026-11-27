@@ -73,31 +73,38 @@ export function RoomFriends({ roomId, full }: { roomId: string; full: boolean })
       {loading ? (
         <p role="status">Carregando amigos…</p>
       ) : (
-        <>
-          {friends.map((friend) => (
-            <div className="room-friend-row" key={friend.username}>
-              <a href={"/?usuario=" + encodeURIComponent(friend.username)} className="room-member-link">
-                <ProfileAvatar name={friend.name} avatar={friend.avatar} />
-                <span>
-                  {friend.name}
-                  <small>@{friend.username}</small>
-                </span>
-              </a>
-              <button
-                type="button"
-                className={friend.invited || friend.joined ? "" : "primary"}
-                disabled={busy || full || friend.invited || friend.joined}
-                onClick={() => void invite(friend)}
-                aria-label={(friend.joined ? "Na sala: " : friend.invited ? "Convidado: " : "Convidar ") + friend.name}
-              >
-                {friend.joined ? "Na sala" : friend.invited ? "Convidado" : "Convidar"}
-              </button>
-            </div>
-          ))}
+        <div className="room-friends-list">
+          {friends
+            .filter((friend) => !friend.joined)
+            .map((friend) => (
+              <div className="room-friend-row" key={friend.username}>
+                <a href={"/?usuario=" + encodeURIComponent(friend.username)} className="room-member-link">
+                  <ProfileAvatar name={friend.name} avatar={friend.avatar} />
+                  <span>
+                    {friend.name}
+                    <small>@{friend.username}</small>
+                  </span>
+                </a>
+                <button
+                  type="button"
+                  className={friend.invited || friend.joined ? "" : "primary"}
+                  disabled={busy || full || friend.invited || friend.joined}
+                  onClick={() => void invite(friend)}
+                  aria-label={
+                    (friend.joined ? "Na sala: " : friend.invited ? "Convidado: " : "Convidar ") + friend.name
+                  }
+                >
+                  {friend.joined ? "Na sala" : friend.invited ? "Convidado" : "Convidar"}
+                </button>
+              </div>
+            ))}
           {!friends.length && !error && (
             <p>
               Você ainda não tem amigos adicionados. <a href="/amigos">Encontrar amigos</a>
             </p>
+          )}
+          {!!friends.length && friends.every((friend) => friend.joined) && !more && (
+            <p className="muted">Todos os seus amigos já estão na sala.</p>
           )}
           {more && (
             <button
@@ -116,7 +123,7 @@ export function RoomFriends({ roomId, full }: { roomId: string; full: boolean })
               Mostrar mais amigos
             </button>
           )}
-        </>
+        </div>
       )}
       {full && <p role="status">A sala está cheia.</p>}
       {notice && (

@@ -1,0 +1,191 @@
+/* Saguão da sala (antes da rodada): título compacto e duas colunas, "Quem vem" e "Como vai ser a rodada",
+   pensado para caber numa tela de notebook sem rolar. No celular as colunas empilham. */
+.rooms-page:has(.room-lobby-layout) {
+  max-width: 1180px;
+  padding-top: 12px;
+  padding-bottom: 28px;
+}
+.room-intro.room-intro-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: none;
+  margin-bottom: 10px;
+}
+.room-intro-compact .room-eyebrow {
+  display: none;
+}
+.room-intro-compact h1 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  line-height: 1.2;
+}
+.room-intro-compact .room-header-actions {
+  flex: none;
+}
+.room-intro-compact .room-header-actions .room-nav-button {
+  min-height: 36px;
+  padding-block: 4px;
+}
+.room-lobby-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.room-lobby-layout > .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: none;
+  margin: 0;
+  padding: 18px 20px;
+}
+.room-lobby-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.room-lobby-heading h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.room-lobby-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.room-lobby-people .room-members {
+  gap: 6px 10px;
+}
+.room-lobby-people .room-member-link {
+  min-height: 0;
+  padding: 4px 8px 4px 4px;
+  border-color: var(--line);
+  border-radius: 999px;
+  font-size: 0.88rem;
+}
+.room-lobby-people .room-members .profile-avatar {
+  width: 30px;
+  height: 30px;
+}
+.room-lobby-people .room-members small {
+  display: none;
+}
+.room-lobby-people .room-friends {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 12px 14px;
+}
+.room-lobby-people .room-friends h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.room-lobby-people .room-friends > p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+.room-friends-list {
+  flex: 1;
+  min-height: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.room-lobby-people .room-friend-row {
+  padding: 6px 0;
+}
+.room-lobby-people .room-friend-row .profile-avatar {
+  width: 32px;
+  height: 32px;
+}
+.room-lobby-people .room-friend-row > button {
+  min-height: 34px;
+  padding: 4px 12px;
+}
+.room-lobby-link {
+  display: grid;
+  gap: 6px;
+}
+.room-lobby-link label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.room-lobby-link-row {
+  display: flex;
+  gap: 8px;
+}
+.room-lobby-link-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.room-lobby-link-row button {
+  flex: none;
+}
+.room-lobby-link small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.room-lobby-settings .room-genre-filter {
+  padding: 10px 14px 12px;
+  border-radius: 12px;
+}
+.room-lobby-settings .room-genre-filter legend {
+  padding: 0 6px;
+  font-size: 0.9rem;
+}
+.room-lobby-settings .room-genre-options {
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.room-lobby-settings .room-genre-options button {
+  min-height: 30px;
+  padding: 3px 11px;
+  font-size: 0.78rem;
+}
+.room-lobby-settings .room-genre-filter small {
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.room-lobby-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.room-lobby-start {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.room-lobby-start p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.room-lobby-start .primary {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+}
+.room-lobby-start .room-lobby-waiting {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .room-lobby-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .room-lobby-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
