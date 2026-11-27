@@ -16,7 +16,7 @@ export const routes: ReadonlyArray<readonly [string, RegExp, Target]> = [
   ["PUT", /^rooms\/[a-f0-9-]{36}\/reconsider\/[a-z0-9-]+$/, "social"],
   ["PUT", /^me\/visibility$/, "social"],
   ["DELETE", /^rooms\/[a-f0-9-]{36}$/, "social"],
-  ["GET", /^friends(?:\/(?:search|status|profile))?$/, "social"],
+  ["GET", /^friends(?:\/(?:search|status|profile|compatibility))?$/, "social"],
   ["POST", /^friends$/, "social"],
   ["PUT", /^friends\/[a-f0-9-]{36}$/, "social"],
   ["PUT", /^rooms\/[a-f0-9-]{36}\/settings$/, "social"],
@@ -39,8 +39,10 @@ export const routes: ReadonlyArray<readonly [string, RegExp, Target]> = [
   ["PUT", /^me\/ranking(?:\/[a-z0-9-]+)?$/, "social"],
   ["GET", /^title-batch$/, "catalog"],
   ["GET", /^titles(?:\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+|(?:ep|season)-[a-z0-9-]+))?$/, "catalog"],
-  ["PUT", /^titles\/[a-z0-9-]+\/spoiler-vote$/, "social"],
-  ["GET", /^(?:me|profiles\/[a-z0-9_]+|titles\/[a-z0-9-]+\/(?:reviews|community))$/, "social"],
+  ["PUT", /^titles\/[a-z0-9-]+\/(?:spoiler-vote|review-like)$/, "social"],
+  ["GET", /^(?:me|profiles\/[a-z0-9_]+|titles\/[a-z0-9-]+\/(?:reviews|community|friends|review-comments))$/, "social"],
+  ["POST", /^titles\/[a-z0-9-]+\/review-comments$/, "social"],
+  ["DELETE", /^titles\/[a-z0-9-]+\/review-comments\/[a-f0-9-]{36}$/, "social"],
   [
     "PUT",
     /^me\/(?:profile|library\/[a-z0-9-]+\/(?:watched|interest|rating|review|rewatching|visibility)|viewings\/[a-f0-9-]{36})$/,
@@ -48,6 +50,17 @@ export const routes: ReadonlyArray<readonly [string, RegExp, Target]> = [
   ],
   ["POST", /^me\/viewings$/, "social"],
   ["DELETE", /^me\/viewings\/[a-f0-9-]{36}$/, "social"],
+  ["GET", /^me\/collections(?:\/[a-f0-9-]{36})?$/, "social"],
+  ["POST", /^me\/collections$/, "social"],
+  ["PUT", /^me\/collections\/[a-f0-9-]{36}(?:\/items)?$/, "social"],
+  ["DELETE", /^me\/collections\/[a-f0-9-]{36}$/, "social"],
+  ["GET", /^collections(?:\/[a-f0-9-]{36})?$/, "social"],
+  ["GET", /^me\/(?:stats|goal|export)$/, "social"],
+  ["PUT", /^me\/goal$/, "social"],
+  ["GET", /^feed$/, "social"],
+  ["GET", /^recommendations$/, "social"],
+  ["POST", /^recommendations$/, "social"],
+  ["PUT", /^recommendations\/[a-f0-9-]{36}\/read$/, "social"],
 ];
 
 /**
@@ -59,4 +72,20 @@ export const routes: ReadonlyArray<readonly [string, RegExp, Target]> = [
 export function resolveRoute(method: string, path: string): Target | null {
   const route = routes.find(([routeMethod, pattern]) => routeMethod === method && pattern.test(path));
   return route ? route[2] : null;
+}
+
+/** Rotas do social que consultam o catálogo em lote e por isso precisam do mesmo prazo de `title-batch`. */
+const BATCH_PATHS = new Set(["title-batch", "me/stats", "library-page"]);
+
+/**
+ * Prazo (ms) para o serviço interno responder.
+ * @param path caminho após /api/v1, sem barra inicial
+ * @param download true para downloads (backup e exportação), que levam mais tempo para gerar o arquivo
+ * @returns o prazo em milissegundos
+ */
+export function upstreamTimeout(path: string, download: boolean): number {
+  if (path.startsWith("rooms/") && (path.endsWith("/start") || path.endsWith("/more"))) return 65000;
+  if (BATCH_PATHS.has(path)) return 25000;
+  if (/^me\/(?:season|series)-progress\//.test(path)) return 15000;
+  return download ? 30000 : 6500;
 }

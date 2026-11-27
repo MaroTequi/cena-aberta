@@ -87,4 +87,32 @@ class CatalogTest {
  status=404;
  assertEquals(404,assertThrows(ResponseStatusException.class,()->service.detail("tmdb-movie-1")).getStatusCode().value());
  }
+ @Test void batchWithoutDetailsFlagKeepsDetailsNull(){
+ assertNull(catalog.batch(List.of("demo-ultimo-rolo"),0,null,false).getFirst().details());
+ }
+ @Test void batchWithDetailsUsesFixturesStoredJsonAndGenreFallback(){
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,details) values('tmdb-movie-10','movie',false,'Dez','Dez','2001','',null,?)",
+ "{\"genres\":[\"Crime\"],\"runtime\":120,\"seasons\":null,\"episodes\":null,\"directors\":[],\"creators\":[],\"cast\":[]}");
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,genre_ids) values('tmdb-movie-11','movie',false,'Onze','Onze','2002','',null,'28,99999')");
+ var found=catalog.batch(List.of("demo-ultimo-rolo","tmdb-movie-10","tmdb-movie-11","tmdb-movie-12"),0,null,true);
+ assertEquals(3,found.size());
+ var byId=new HashMap<String,Catalog.Title>();for(var t:found)byId.put(t.id(),t);
+ assertEquals(96,byId.get("demo-ultimo-rolo").details().runtime());
+ assertEquals(List.of("Crime"),byId.get("tmdb-movie-10").details().genres());
+ assertEquals(120,byId.get("tmdb-movie-10").details().runtime());
+ assertEquals(List.of("Ação"),byId.get("tmdb-movie-11").details().genres());
+ assertNull(byId.get("tmdb-movie-11").details().runtime());
+ }
+ @Test void batchWithDetailsFetchesMissingDetailsFromTmdbAndToleratesFailure(){
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,genre_ids) values('tmdb-movie-603','movie',false,'Matrix','Matrix','1999','',null,'28')");
+ body="""
+ {"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"x","runtime":136,
+ "genres":[{"id":28,"name":"Ação"}],"original_language":"en","credits":{"cast":[],"crew":[]}}""";
+ assertEquals(136,remote().batch(List.of("tmdb-movie-603"),0,null,true).getFirst().details().runtime());
+ db.update("update title set details=null");
+ status=500;
+ var fallback=remote().batch(List.of("tmdb-movie-603"),0,null,true).getFirst().details();
+ assertEquals(List.of("Ação"),fallback.genres());
+ assertNull(fallback.runtime());
+ }
 }

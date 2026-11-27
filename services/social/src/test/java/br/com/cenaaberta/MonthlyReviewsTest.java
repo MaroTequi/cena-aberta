@@ -19,7 +19,7 @@ class MonthlyReviewsTest {
             migrations.addScript(new ClassPathResource("db/migration/"+file));
         migrations.execute(source);
         var db=new JdbcTemplate(source);
-        var service=new Social(db,new ActiveActors(db),mock(LibraryEntries.class),mock(Ranking.class));
+        var service=new Social(db,new ActiveActors(db),mock(LibraryEntries.class),mock(Ranking.class),mock(CatalogTitles.class));
         var date=OffsetDateTime.now();
         for(int i=0;i<60;i++){
             String user="reader"+i;

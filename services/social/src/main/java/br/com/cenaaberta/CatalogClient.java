@@ -3,6 +3,7 @@ package br.com.cenaaberta;
 import java.net.URI;
 import java.net.http.*;
 import java.time.*;
+import java.util.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +17,7 @@ import static br.com.cenaaberta.Guards.*;
 
 /** Cliente HTTP do serviço de catálogo, autenticado pela chave interna. */
 @Component
-class CatalogClient implements TitleVerifier, CatalogSeasons {
+class CatalogClient implements TitleVerifier, CatalogSeasons, CatalogTitles {
 
     private final ObjectMapper mapper;
     private final String catalogKey, catalog;
@@ -77,5 +78,27 @@ class CatalogClient implements TitleVerifier, CatalogSeasons {
         } catch(java.io.IOException e) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
         }
+    }
+
+    /** O catálogo aceita até 30 ids por chamada, então o lote é dividido. */
+    @Override
+    public Map<String,JsonNode> titles(Collection<String> ids,boolean details) {
+        var unique=new ArrayList<>(new LinkedHashSet<>(ids));
+        var result=new HashMap<String,JsonNode>();
+        for(int start=0;start<unique.size();start+=30) {
+            var chunk=unique.subList(start,Math.min(start+30,unique.size()));
+            try {
+                var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/title-batch?details="+details+"&ids="+String.join(",",chunk)))
+                    .timeout(Duration.ofSeconds(25)).header("X-Internal-Key",catalogKey).GET().build(),HttpResponse.BodyHandlers.ofString());
+                if(response.statusCode()!=200)fail(HttpStatus.SERVICE_UNAVAILABLE,"Catálogo indisponível.");
+                for(JsonNode title:mapper.readTree(response.body()))result.put(title.path("id").asText(),title);
+            } catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail(HttpStatus.SERVICE_UNAVAILABLE,"Consulta interrompida.");
+            } catch(java.io.IOException e) {
+                fail(HttpStatus.SERVICE_UNAVAILABLE,"Catálogo indisponível.");
+            }
+        }
+        return result;
     }
 }

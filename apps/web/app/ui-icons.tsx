@@ -20,7 +20,13 @@ export function UiIcon({
     | "clock"
     | "link"
     | "back"
-    | "tree";
+    | "tree"
+    | "feed"
+    | "list"
+    | "chart"
+    | "send"
+    | "comment"
+    | "download";
 }) {
   const paths = {
     tree: <path d="m12 2 5 6h-3l5 6h-4l5 5H4l5-5H5l5-6H7l5-6Zm0 17v3" />,
@@ -89,6 +95,17 @@ export function UiIcon({
         <path d="M9 9a4 4 0 0 0 6 6" />
       </>
     ),
+    feed: <path d="M4 5h16M4 10h16M4 15h10M4 20h7" />,
+    list: (
+      <>
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+      </>
+    ),
+    chart: <path d="M4 20V10m6 10V4m6 16v-7m4 7H2" />,
+    send: <path d="M21 3 3 10.5l7 2.5 2.5 7L21 3Zm-11 10 5-5" />,
+    comment: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />,
+    download: <path d="M12 3v12m-5-5 5 5 5-5M4 20h16" />,
   };
   return (
     <svg

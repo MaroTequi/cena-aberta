@@ -1,9 +1,7 @@
 "use client";
-import { EditorialLinks } from "./editorial-links";
 import { WatchGuides } from "./watch-guides";
-import { NotificationBell } from "./notification-bell";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { signIn, signOut } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { SeriesSeasons } from "./series-seasons";
 import Link from "next/link";
@@ -15,7 +13,6 @@ import type { Title } from "../lib/types";
 import { CardTitle } from "./card-title";
 import { ThemePicker } from "./theme-picker";
 import { CatalogSearch } from "./catalog-search";
-import { CatalogDrawer } from "./catalog-drawer";
 import { FilmRanking, rankingCategories } from "./film-ranking";
 import type { Release } from "../lib/releases";
 import { Landing } from "./landing";
@@ -27,6 +24,14 @@ import { ReviewReport } from "./review-report";
 import { ReviewEditor } from "./review-editor";
 import { Icon, IconAction } from "./action-icons";
 import { ProfileAvatar, ProfileForm, type Profile, type ProfileInput } from "./profile-form";
+import { LibraryPage } from "./library-page";
+import { ProfileLists } from "./profile-lists";
+import { ProfileCompatibility } from "./profile-compatibility";
+import { AddToCollection } from "./title-social/add-to-collection";
+import { RecommendTitle } from "./title-social/recommend-title";
+import { TitleFriends } from "./title-social/title-friends";
+import { ReviewSocial } from "./title-social/review-social";
+import { MainHeader, categories } from "./main-header";
 
 type Entry = {
   title: string;
@@ -44,7 +49,7 @@ type Entry = {
 };
 type Viewing = { id: string; title: string; watched_on: string | null; watched_at: string | null; rewatch: boolean };
 type PendingViewing = { title: string; name: string; watchedAt: string };
-const profileSections = ["watchlist", "ranking", "watched", "diary"] as const;
+const profileSections = ["watchlist", "ranking", "watched", "diary", "lists"] as const;
 type Section = (typeof profileSections)[number];
 type Dashboard = {
   visibility?: Record<Section, boolean>;
@@ -64,6 +69,9 @@ type Review = {
   spoiler: boolean;
   version: number;
   my_vote: boolean | null;
+  likes?: number;
+  liked?: boolean;
+  comments?: number;
 };
 type RankedSeries = { title: string; tier: number; average: number };
 type SeasonProgress = { watched: number; total: number; average: number | null; rewatched: boolean; complete: boolean };
@@ -93,12 +101,6 @@ const demoEpisodeRatings = [
   { viewer: "Rafael", episode: 1, rating: 6 },
   { viewer: "Bia", episode: 2, rating: 10 },
   { viewer: "Diego", episode: 3, rating: 7 },
-];
-const categories = [
-  ["all", "Explorar"],
-  ["movie", "Filmes"],
-  ["tv", "Séries"],
-  ["anime", "Animes"],
 ];
 const labels: Record<string, string> = {
   "demo-ultimo-rolo": "O Último Rolo",
@@ -146,92 +148,6 @@ async function api<T>(path: string, method = "GET", body?: unknown, key?: string
   return json;
 }
 type DiaryResult = { items: Viewing[]; hasMore: boolean };
-
-function LibraryPage({
-  section,
-  username,
-  dashboard,
-  render,
-}: {
-  section: "watchlist" | "watched";
-  username?: string;
-  dashboard: Dashboard;
-  render: (item: Entry, title?: Title) => ReactNode;
-}) {
-  const [page, setPage] = useState(1),
-    [attempt, retry] = useState(0);
-  const [result, setResult] = useState<{
-    page: number;
-    dashboard: Dashboard;
-    items: Entry[];
-    pages: number;
-    titles: Map<string, Title>;
-  } | null>(null);
-  const [error, setError] = useState("");
-  const strip = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let active = true;
-    setError("");
-    const params = new URLSearchParams({ section, page: String(page) });
-    if (username) params.set("username", username);
-    (async () => {
-      const { items, pages } = await api<{ items: Entry[]; pages: number }>("library-page?" + params);
-      if (!active) return;
-      if (!items.length && page > 1) {
-        setPage(page - 1);
-        return;
-      }
-      const titles = items.length
-        ? await api<Title[]>("title-batch?ids=" + encodeURIComponent(items.map((i) => i.title).join(",")))
-        : [];
-      if (active) setResult({ page, dashboard, items, pages, titles: new Map(titles.map((t) => [t.id, t])) });
-    })().catch((e) => {
-      if (active) setError(e.message);
-    });
-    return () => {
-      active = false;
-    };
-  }, [section, username, dashboard, page, attempt]);
-  useEffect(() => {
-    if (strip.current) strip.current.scrollLeft = 0;
-  }, [page]);
-  if (error)
-    return (
-      <p role="alert">
-        {error} <button onClick={() => retry((n) => n + 1)}>Tentar novamente</button>
-      </p>
-    );
-  if (!result || result.page !== page || result.dashboard !== dashboard) return <p role="status">Carregando obras…</p>;
-  return (
-    <>
-      <div ref={strip} className="grid profile-card-strip">
-        {result.items.map((item) => render(item, result.titles.get(item.title)))}
-      </div>
-      {!result.items.length && (
-        <p className="muted">{section === "watchlist" ? "Nenhuma obra salva." : "Nenhuma avaliação ou obra vista."}</p>
-      )}
-      {result.pages > 1 && (
-        <nav className="row pagination" aria-label={"Páginas de " + (section === "watched" ? "Já vistos" : "Vou ver")}>
-          <button disabled={page === 1} onClick={() => setPage(1)} aria-label="Primeira página">
-            «
-          </button>
-          <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </button>
-          <span aria-live="polite">
-            {page} de {result.pages}
-          </span>
-          <button disabled={page === result.pages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </button>
-          <button disabled={page === result.pages} onClick={() => setPage(result.pages)} aria-label="Última página">
-            »
-          </button>
-        </nav>
-      )}
-    </>
-  );
-}
 
 function DiaryDialog({
   dashboard,
@@ -906,111 +822,15 @@ export function App({
   }
   return (
     <>
-      <header className="top">
-        <div className="wrap nav">
-          {authenticated && (
-            <CatalogDrawer
-              categories={categories.map(([id, name]) => [id, id === "all" ? "Explorar" : name])}
-              current={tab}
-              onSelect={changeTab}
-            />
-          )}
-          <button className="logo" onClick={() => changeTab("all")}>
-            <span className="mark">◈</span> cena<span>aberta</span>
-          </button>
-          <nav aria-label="Navegação principal">
-            {authenticated && (
-              <>
-                {categories.map(([id, name]) => (
-                  <button
-                    key={id}
-                    className={(tab === id ? "nav-active " : "") + "catalog-desktop-category"}
-                    onClick={() => changeTab(id)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </>
-            )}
-            <Link className="room-nav-link" href="/resenhas" aria-current={tab === "reviews" ? "page" : undefined}>
-              Resenhas
-            </Link>
-            <EditorialLinks onRecommendationsPage={tab === "recommendations"} />
-            {authenticated && (
-              <a className="room-nav-link" href="/salas">
-                <UiIcon name="card" />
-                Sélete
-              </a>
-            )}
-          </nav>
-          <div className={authenticated ? "account account-signed-in" : "account"}>
-            {authenticated ? (
-              <>
-                <NotificationBell />
-                <button
-                  type="button"
-                  className="nav-profile"
-                  aria-label="Meu perfil"
-                  title="Meu perfil"
-                  aria-current={tab === "profile" && !pageTitle && owned ? "page" : undefined}
-                  onClick={() => changeTab("profile")}
-                >
-                  {data?.profile ? (
-                    <ProfileAvatar name={data.profile.name} avatar={data.profile.avatar} />
-                  ) : (
-                    <span className="profile-avatar profile-initial" aria-hidden="true">
-                      <svg
-                        width="17"
-                        height="17"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      >
-                        <circle cx="12" cy="8" r="3.5" />
-                        <path d="M5 20v-1a7 7 0 0 1 14 0v1" />
-                      </svg>
-                    </span>
-                  )}
-                  <span className="nav-profile-label">Meu perfil</span>
-                </button>
-                <button
-                  type="button"
-                  className="nav-signout"
-                  aria-label="Sair"
-                  title="Sair da conta"
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5m3-12 4 4-4 4m-5-4h9" />
-                  </svg>
-                  <span>Sair</span>
-                </button>
-              </>
-            ) : emailAccounts ? (
-              <>
-                <a className="account-link nav-login" href="/conta">
-                  Entrar
-                </a>
-                <a className="account-link primary" href="/conta?modo=register">
-                  Criar conta
-                </a>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <MainHeader
+        authenticated={authenticated}
+        emailAccounts={emailAccounts}
+        tab={tab}
+        profile={data?.profile}
+        profileActive={tab === "profile" && !pageTitle && owned}
+        onCategory={changeTab}
+        onProfile={() => changeTab("profile")}
+      />
       <main className="wrap">
         {error && (
           <p role="alert" className="message error">
@@ -1176,7 +996,10 @@ export function App({
                     </div>
                   </div>
                   {!owned && current?.profile && (
-                    <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                    <>
+                      <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                      <ProfileCompatibility username={current.profile.username} name={current.profile.name} />
+                    </>
                   )}
                   {owned && current?.profile && (
                     <>
@@ -1226,9 +1049,10 @@ export function App({
                             <h2>Vou ver</h2>
                             {sectionVisibility("watchlist", "Vou ver")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watchlist"
+                            diaryVisible={false}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1259,9 +1083,10 @@ export function App({
                             <h2>Já vistos e avaliações</h2>
                             {sectionVisibility("watched", "já vistos")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watched"
+                            diaryVisible={showSection("diary")}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1322,6 +1147,13 @@ export function App({
                             }}
                           />
                         </section>
+                      )}
+                      {showSection("lists") && (
+                        <ProfileLists
+                          key={current.profile.username}
+                          username={owned ? undefined : current.profile.username}
+                          visibility={sectionVisibility("lists", "listas")}
+                        />
                       )}
                       {diaryTitle && showSection("diary") && (
                         <DiaryDialog
@@ -1555,6 +1387,15 @@ export function App({
                         )}
                       </div>
                     )}
+                    <div className="row title-social-actions">
+                      <AddToCollection key={"collection-" + title.id} titleId={title.id} name={title.name} />
+                      <RecommendTitle
+                        key={"recommend-" + title.id}
+                        titleId={title.id}
+                        name={title.name}
+                        username={data.profile.username}
+                      />
+                    </div>
                     {entry.watched && (
                       <div className="form">
                         {title.format === "tv" ? (
@@ -1600,6 +1441,7 @@ export function App({
             {title.format === "tv" && <SeriesSeasons key={title.id} title={title.id} />}
             {chronology}
             {!!title.details?.people?.length && <WorkPeople people={title.details.people} titleId={title.id} />}
+            {data?.profile && <TitleFriends key={title.id} titleId={title.id} watched={entry.watched} />}
             {community && (
               <section className="community" aria-labelledby="community-heading">
                 <h3 id="community-heading">Comunidade</h3>
@@ -1639,6 +1481,13 @@ export function App({
                       watched={entry.watched}
                       text={review.review}
                       version={review.version}
+                      initial={review}
+                    />
+                    <ReviewSocial
+                      key={[title.id, review.username, review.likes, review.liked, review.comments].join("-")}
+                      titleId={title.id}
+                      author={review.username}
+                      own={review.username === data?.profile?.username}
                       initial={review}
                     />
                   </article>

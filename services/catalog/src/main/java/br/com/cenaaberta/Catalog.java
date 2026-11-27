@@ -657,7 +657,57 @@ public class Catalog {
         return result;
     }
 
-    @GetMapping("/title-batch") List<Title> batch(@RequestParam List<String> ids,@RequestParam(defaultValue="0") int genre,@RequestParam(required=false) List<Integer> genres) {
+    /**
+     * Busca até 30 obras de uma vez.
+     * @param ids identificadores das obras
+     * @param genre gênero único (legado) para filtrar; 0 = sem filtro
+     * @param genres gêneros para filtrar
+     * @param details quando true, cada obra traz {@code details} (gêneros e duração) para estatísticas
+     * @return obras encontradas; ausentes são omitidas
+     */
+    @GetMapping("/title-batch") List<Title> batch(@RequestParam List<String> ids,@RequestParam(defaultValue="0") int genre,@RequestParam(required=false) List<Integer> genres,@RequestParam(defaultValue="false") boolean details) {
+        var found=titleBatch(ids,genre,genres);
+        return details?withStoredDetails(found):found;
+    }
+
+    /**
+     * Completa os detalhes das obras do lote sem mudar o comportamento padrão do title-batch.
+     * Usa o JSON de detalhes já salvo; se não houver e o TMDB estiver configurado, tenta buscá-lo
+     * (falha vira fallback com os gêneros resumidos da busca, sem duração).
+     */
+    private List<Title> withStoredDetails(List<Title> titles) {
+        var pending=titles.stream().filter(t -> t.details()==null).map(Title::id).toList();
+        if(pending.isEmpty())return titles;
+        var stored=new HashMap<String,Details>();
+        var withoutDetails=new ArrayList<String>();
+        String placeholders=String.join(",",Collections.nCopies(pending.size(),"?"));
+        db.query("select id,details,genre_ids from title where id in ("+placeholders+")",row -> {
+            String json=row.getString("details");
+            try { if(json!=null) { stored.put(row.getString("id"),mapper.readValue(json,Details.class)); return; } }
+            catch(com.fasterxml.jackson.core.JsonProcessingException invalid) { /* usa o fallback abaixo */ }
+            withoutDetails.add(row.getString("id"));
+            String encoded=row.getString("genre_ids");
+            var names=encoded==null||encoded.isBlank()?List.<String>of():Arrays.stream(encoded.split(","))
+                .map(code -> { try { return GENRES.get(Integer.valueOf(code)); } catch(NumberFormatException bad) { return null; } })
+                .filter(Objects::nonNull).toList();
+            stored.put(row.getString("id"),new Details(names,null,null,null,List.of(),List.of(),List.of()));
+        },pending.toArray());
+        if(!token.isBlank()&&!withoutDetails.isEmpty()) {
+            try(var executor=java.util.concurrent.Executors.newFixedThreadPool(6)) {
+                var tasks=withoutDetails.stream().map(id -> executor.submit(() -> detail(id))).toList();
+                for(var task:tasks) {
+                    try { Title title=task.get(); if(title.details()!=null)stored.put(title.id(),title.details()); }
+                    catch(InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                    catch(java.util.concurrent.ExecutionException unavailable) { /* mantém o fallback */ }
+                }
+            }
+        }
+        return titles.stream().map(t -> t.details()!=null?t
+            :fixtures.stream().anyMatch(f -> f.id().equals(t.id()))?t.withDetails(demoDetails(t.id()))
+            :t.withDetails(stored.get(t.id()))).toList();
+    }
+
+    private List<Title> titleBatch(List<String> ids,int genre,List<Integer> genres) {
 
         var selected=selectedGenres(genre,genres);
         if (ids.size() > 30) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);

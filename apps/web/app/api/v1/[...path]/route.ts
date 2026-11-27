@@ -1,7 +1,7 @@
 import { profileState } from "../../../../lib/profile";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../../../lib/auth";
-import { resolveRoute } from "../../../../lib/api-routes";
+import { resolveRoute, upstreamTimeout } from "../../../../lib/api-routes";
 
 async function proxy(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const path = (await params).path.join("/");
@@ -28,6 +28,8 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
   }
   const catalog = route === "catalog";
   const backup = route === "backup";
+  // Downloads (backup e exportação do usuário) precisam do nome do arquivo e de mais tempo para gerar o ZIP.
+  const download = backup || (request.method === "GET" && path === "me/export");
   const base = backup
     ? "http://backup:8183"
     : catalog
@@ -72,22 +74,12 @@ async function proxy(request: Request, { params }: { params: Promise<{ path: str
       body,
       cache: "no-store",
       signal:
-        backup && path.startsWith("backups/")
-          ? request.signal
-          : AbortSignal.timeout(
-              path.startsWith("rooms/") && (path.endsWith("/start") || path.endsWith("/more"))
-                ? 65000
-                : path === "title-batch"
-                  ? 25000
-                  : /^me\/(?:season|series)-progress\//.test(path)
-                    ? 15000
-                    : 6500,
-            ),
+        backup && path.startsWith("backups/") ? request.signal : AbortSignal.timeout(upstreamTimeout(path, download)),
     });
     return new Response(result.body, {
       status: result.status,
       headers: {
-        ...(backup && result.headers.has("content-disposition")
+        ...(download && result.headers.has("content-disposition")
           ? { "Content-Disposition": result.headers.get("content-disposition")! }
           : {}),
         "Content-Type": result.headers.get("content-type") ?? "application/json",
