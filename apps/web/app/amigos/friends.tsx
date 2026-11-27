@@ -1,5 +1,5 @@
 "use client";
-import { NotificationBell } from "../notification-bell";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { UiIcon } from "../ui-icons";
 import { ProfileAvatar } from "../profile-form";
@@ -121,20 +121,8 @@ export function FriendsPanel({ profile }: { profile: { name: string; avatar?: st
   }
   return (
     <main className="wrap friends-page">
-      <header className="room-header">
-        <a className="account-brand" href="/">
-          Cena Aberta
-        </a>
-        <div className="row">
-          <NotificationBell />
-          <a className="room-nav-button room-profile-link" href="/?aba=profile">
-            <ProfileAvatar name={profile.name} avatar={profile.avatar} />
-            Meu perfil
-          </a>
-        </div>
-      </header>
       <nav className="work-back-links" aria-label="Navegação de Amigos">
-        <a
+        <Link
           className="room-nav-button"
           href="/?aba=profile"
           onClick={(event) => {
@@ -152,7 +140,7 @@ export function FriendsPanel({ profile }: { profile: { name: string; avatar?: st
         >
           <UiIcon name="back" />
           Voltar
-        </a>
+        </Link>
       </nav>
       <div className="room-intro">
         <span className="room-eyebrow">BOAS HISTÓRIAS, BOAS COMPANHIAS</span>

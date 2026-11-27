@@ -1,0 +1,171 @@
+button.notification-bell {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--text);
+}
+.notification-bell:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.notification-count {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  min-width: 18px;
+  padding: 1px 4px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 16px;
+}
+.notification-dialog {
+  max-height: 80dvh;
+  overflow: auto;
+}
+.notification-dialog ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.notification-dialog li a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  text-decoration: none;
+  color: var(--text);
+  border-top: 1px solid var(--line);
+}
+.notification-dialog li a:hover strong {
+  text-decoration: underline;
+}
+.notification-dialog li svg {
+  flex: none;
+  color: var(--accent);
+}
+.notification-dialog li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.notification-dialog li small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.room-end-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.catalog-search {
+  position: relative;
+}
+.catalog-suggestions {
+  position: absolute;
+  z-index: 5;
+  inset: calc(100% + 5px) 0 auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px #0003;
+}
+.catalog-suggestions li {
+  display: grid;
+  align-content: center;
+  min-height: 44px;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.catalog-suggestions li:hover,
+.catalog-suggestions li[aria-selected="true"] {
+  background: var(--surface);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.hero:has(.catalog-suggestions:not([hidden])) {
+  overflow: visible;
+  z-index: 2;
+}
+@media (max-width: 650px) {
+  .top .nav {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    padding-block: 6px 10px;
+  }
+  .top .nav .logo {
+    grid-column: 1/-1;
+    justify-self: center;
+    padding-inline: 0;
+  }
+  .top .nav > nav {
+    grid-row: 2;
+    grid-column: 1;
+    width: auto;
+    order: 0;
+    gap: 4px;
+    padding: 0;
+  }
+  .top .nav > .account {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: end;
+    gap: 4px;
+  }
+  .top .nav .nav-profile {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .nav-profile-label {
+    display: none;
+  }
+  .top .nav .nav-signout {
+    width: 44px;
+    padding: 0;
+  }
+  .top .nav .nav-signout span {
+    display: none;
+  }
+  .top .nav > .account:not(.account-signed-in) {
+    display: none;
+  }
+}
+@media (max-width: 360px) {
+  .top .nav {
+    width: calc(100% - 16px);
+    gap: 4px;
+  }
+  .top .nav .catalog-drawer-trigger,
+  .top .nav .room-nav-link {
+    padding-inline: 4px;
+    gap: 4px;
+  }
+  .top .nav > .account {
+    gap: 2px;
+  }
+}

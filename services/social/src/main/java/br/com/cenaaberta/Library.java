@@ -19,10 +19,10 @@ public class Library {
     private final JdbcTemplate db;
     private final ActiveActors actors;
     private final LibraryEntries entries;
-    private final Diary diary;
+    private final Viewings viewings;
 
-    Library(JdbcTemplate db,ActiveActors actors,LibraryEntries entries,Diary diary) {
-        this.db=db; this.actors=actors; this.entries=entries; this.diary=diary;
+    Library(JdbcTemplate db,ActiveActors actors,LibraryEntries entries,Viewings viewings) {
+        this.db=db; this.actors=actors; this.entries=entries; this.viewings=viewings;
     }
 
     @PutMapping("/me/library/{id}/{action}")
@@ -90,7 +90,9 @@ public class Library {
 
                 if (value!=null && (value<1 || value>10)) fail(HttpStatus.BAD_REQUEST,"Nota fora da escala.");
 
-                db.update("update library set rating=? where actor=? and title=?",value,actor,id);
+                // rated_at só muda quando a nota muda: reenviar a mesma nota não pode "subir" a obra no feed dos amigos.
+                if(!Objects.equals(value,old.get("rating")))
+                    db.update("update library set rating=?,rated_at=? where actor=? and title=?",value,value==null?null:OffsetDateTime.now(ZoneOffset.UTC),actor,id);
 
                 if (value!=null) entries.markWatched(actor,id);
                 var episodeKey=EPISODE_ID.matcher(id);
@@ -115,10 +117,19 @@ public class Library {
                     fail(HttpStatus.CONFLICT,"Resenha alterada. Atualize a página.");
                 }
 
+                boolean textChanged=!Objects.equals(review.isBlank()?null:review,old.get("review"));
                 db.update("update library set review_published_at=case when ? then null when review is null then CURRENT_TIMESTAMP else review_published_at end,review=?,spoiler=?,version=version+1 where actor=? and title=?",review.isBlank(),review.isBlank()?null:review,Boolean.TRUE.equals(input.spoiler()),actor,id);
-
-                if (!Objects.equals(review.isBlank()?null:review,old.get("review")))
+                // Texto novo invalida os votos de spoiler dados ao texto anterior (regra do alpha).
+                if (textChanged) {
                     db.update("delete from review_spoiler_vote where author=? and title=?",actor,id);
+                    // reviewed_at marca a última mudança de texto (ordem do feed); só trocar o spoiler não conta.
+                    db.update("update library set reviewed_at=? where actor=? and title=?",review.isBlank()?null:OffsetDateTime.now(ZoneOffset.UTC),actor,id);
+                }
+                // Apagar a resenha apaga curtidas e comentários dela; editar o texto os mantém.
+                if (review.isBlank() && old.get("review")!=null) {
+                    db.update("delete from review_like where author=? and title=?",actor,id);
+                    db.update("delete from review_comment where author=? and title=?",actor,id);
+                }
 
                 if (!review.isBlank() && old.get("review")==null) {
 
@@ -130,7 +141,7 @@ public class Library {
 
                         OffsetDateTime watchedAt=OffsetDateTime.now(DIARY_ZONE);
 
-                        diary.insertViewing(actor,id,watchedAt.toLocalDate(),false,watchedAt);
+                        viewings.insert(actor,id,watchedAt.toLocalDate(),false,watchedAt);
 
                     }
 
@@ -151,7 +162,7 @@ public class Library {
     private void recordFirstViewing(String actor,String id,OffsetDateTime now) {
         db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
         if(!Rows.exists(db,"select count(*) from viewing where actor=? and title=?",actor,id))
-            diary.insertViewing(actor,id,now.toLocalDate(),false,now);
+            viewings.insert(actor,id,now.toLocalDate(),false,now);
     }
 
 }

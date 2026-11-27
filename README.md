@@ -79,6 +79,8 @@ O mesmo teste passou com PostgreSQL 16 em bancos descartáveis. Para repetir, fo
 
 A alpha pode rodar no PC com Docker Desktop e Tailscale Funnel. Disponibilidade depende do computador ligado, conexão de rede e serviços ativos. iPhone e PWA ainda não foram validados. Algumas áreas sociais usam limites de consulta; amigos e convites têm paginação.
 
+O login com o Google é opcional e funciona junto com as contas por e-mail. Crie um cliente OAuth do tipo "Aplicativo da Web" no [Google Cloud Console](https://console.cloud.google.com/apis/credentials), com retorno em `<NEXTAUTH_URL>/api/auth/callback/google` (no local, `http://localhost:3000/api/auth/callback/google`), e preencha `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`. Quem entra pelo Google com um e-mail verificado que já tem conta continua na mesma conta; e-mail novo cria uma conta, respeitando `INVITE_ONLY`. Para usar também e-mail e senha, a pessoa define uma senha em "Esqueci a senha".
+
 OIDC permanece opcional. Configure `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` e `INVITED_SUBJECTS`, com retorno em `/api/auth/callback/keycloak`. [Documentação OIDC do Keycloak](https://www.keycloak.org/securing-apps/oidc-layers).
 
 O catálogo de demonstração e a identidade visual são próprios. O projeto se inspira na ideia de diário audiovisual do Letterboxd.

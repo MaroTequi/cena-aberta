@@ -2,13 +2,17 @@ import { createHash } from "node:crypto";
 import type { NextAuthOptions } from "next-auth";
 import { encode, type JWTEncodeParams } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import Keycloak from "next-auth/providers/keycloak";
 import { accountRequest } from "./accounts";
+import { googleEnabled, googleSignIn, type GoogleAccount } from "./google-login";
 
 const issuer = process.env.OIDC_ISSUER;
 const sessionAge = 8 * 60 * 60;
 const rememberedSessionAge = 30 * 24 * 60 * 60;
 export const emailAccounts = !issuer && process.env.EMAIL_ACCOUNTS === "true";
+/** Login com o Google: liga quando há contas por e-mail e as credenciais GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET. */
+export const googleLogin = googleEnabled(process.env);
 function invited(subject: string) {
   return (process.env.INVITED_SUBJECTS ?? "")
     .split(",")
@@ -61,11 +65,44 @@ export const authOptions: NextAuthOptions = {
               return { ...user, rememberMe: endpoint === "login" && input.rememberMe === "true" };
             },
           }),
+          ...(googleLogin
+            ? [
+                Google({
+                  clientId: process.env.GOOGLE_CLIENT_ID!,
+                  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+                  checks: ["pkce", "state"],
+                  authorization: { params: { prompt: "select_account" } },
+                }),
+              ]
+            : []),
         ]
       : [],
   callbacks: {
-    async signIn({ account, profile }) {
+    async signIn({ account, profile, user }) {
       if (account?.provider === "email-account") return emailAccounts;
+      if (account?.provider === "google") {
+        if (!googleLogin) return false;
+        const result = await googleSignIn(
+          profile as { email?: unknown; email_verified?: unknown } | undefined,
+          account.providerAccountId,
+          (body) =>
+            accountRequest("google", { method: "POST", body }).then(
+              (response) => {
+                // Só o status vai para o log: nada de e-mail, identificador ou token.
+                if (!response.ok) console.warn("Login com o Google: serviço de contas respondeu " + response.status);
+                return response;
+              },
+              (failure: Error) => {
+                console.warn("Login com o Google: serviço de contas inacessível (" + failure.name + ")");
+                throw failure;
+              },
+            ),
+        );
+        if (typeof result === "string") return result;
+        // O mesmo objeto chega ao callback jwt logo depois; é assim que a conta segue para a sessão.
+        (user as { cenaAccount?: GoogleAccount }).cenaAccount = result;
+        return true;
+      }
       return Boolean(
         issuer &&
         account?.provider === "keycloak" &&
@@ -79,6 +116,14 @@ export const authOptions: NextAuthOptions = {
           .update(issuer + "\u0000" + account.providerAccountId)
           .digest("hex");
         token.subject = account.providerAccountId;
+      } else if (account?.provider === "google") {
+        const login = (user as { cenaAccount?: GoogleAccount }).cenaAccount;
+        if (login) {
+          token.actor = login.id;
+          token.accountVersion = login.version;
+          token.rememberMe = false;
+          token.loginExpiresAt = Math.floor(Date.now() / 1000) + sessionAge;
+        }
       } else if (account?.provider === "email-account") {
         const accountUser = user as { version?: number; rememberMe?: boolean };
         token.actor = user.id;

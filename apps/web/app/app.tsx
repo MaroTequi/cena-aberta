@@ -1,9 +1,7 @@
 "use client";
-import { EditorialLinks } from "./editorial-links";
 import { WatchGuides } from "./watch-guides";
-import { NotificationBell } from "./notification-bell";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { signIn, signOut } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { SeriesSeasons } from "./series-seasons";
 import Link from "next/link";
@@ -15,7 +13,6 @@ import type { Title } from "../lib/types";
 import { CardTitle } from "./card-title";
 import { ThemePicker } from "./theme-picker";
 import { CatalogSearch } from "./catalog-search";
-import { CatalogDrawer } from "./catalog-drawer";
 import { FilmRanking, rankingCategories } from "./film-ranking";
 import type { Release } from "../lib/releases";
 import { Landing } from "./landing";
@@ -23,91 +20,38 @@ import { UiIcon } from "./ui-icons";
 import { StarRating } from "./star-rating";
 import { ProfileFriends } from "./profile-friends";
 import { ProfileFriend } from "./profile-friend";
-import { ReviewReport } from "./review-report";
 import { ReviewEditor } from "./review-editor";
 import { Icon, IconAction } from "./action-icons";
-import { ProfileAvatar, ProfileForm, type Profile, type ProfileInput } from "./profile-form";
+import { ProfileAvatar, ProfileForm, type ProfileInput } from "./profile-form";
+import { LibraryPage } from "./library-page";
+import { ProfileLists } from "./profile-lists";
+import { ProfileCompatibility } from "./profile-compatibility";
+import { AddToCollection } from "./title-social/add-to-collection";
+import { RecommendTitle } from "./title-social/recommend-title";
+import { TitleFriends } from "./title-social/title-friends";
+import { ReviewSocial } from "./title-social/review-social";
+import { MainHeader, categories } from "./main-header";
+import { WhereToWatch } from "./where-to-watch";
+import { TrailerButton } from "./trailer";
 
-type Entry = {
-  title: string;
-  watched: boolean;
-  interest: boolean;
-  rewatching: boolean;
-  rating: number | null;
-  review: string | null;
-  spoiler: boolean;
-  version: number;
-  hidden?: boolean;
-  evaluation_public?: boolean;
-  viewer_watched?: boolean;
-  my_vote?: boolean | null;
-};
-type Viewing = { id: string; title: string; watched_on: string | null; watched_at: string | null; rewatch: boolean };
-type PendingViewing = { title: string; name: string; watchedAt: string };
-const profileSections = ["watchlist", "ranking", "watched", "diary"] as const;
-type Section = (typeof profileSections)[number];
-type Dashboard = {
-  visibility?: Record<Section, boolean>;
-  ranking?: { title: string; tier: number }[];
-  needsProfile?: boolean;
-  profile?: Profile;
-  library?: Entry[];
-  diaryHasMore?: boolean;
-  viewings?: Viewing[];
-};
-type Review = {
-  username: string;
-  name: string;
-  avatar?: string;
-  rating: number | null;
-  review: string;
-  spoiler: boolean;
-  version: number;
-  my_vote: boolean | null;
-};
-type RankedSeries = { title: string; tier: number; average: number };
-type SeasonProgress = { watched: number; total: number; average: number | null; rewatched: boolean; complete: boolean };
-type SeasonAverage = { season: number; average: number };
-type Community = {
-  seasons?: SeasonAverage[];
-  average: number | null;
-  rating_count: number;
-  episode_rating_count?: number;
-  reviews: Review[];
-};
-const demoEvaluations = [
-  { name: "Clara", rating: 9, review: "Gostei de como a fotografia muda com o clima da história.", spoiler: false },
-  { name: "Rafael", rating: 6, review: "A atmosfera me ganhou, mas achei o começo lento.", spoiler: false },
-  {
-    name: "Bia",
-    rating: 10,
-    review: "A escolha da personagem na cena final mudou minha leitura da história. Este comentário é fictício.",
-    spoiler: true,
-  },
-  { name: "Diego", rating: 7, review: null, spoiler: false },
-];
-const demoSum = demoEvaluations.reduce((sum, item) => sum + item.rating, 0);
-const demoEpisodeRatings = [
-  { viewer: "Clara", episode: 1, rating: 9 },
-  { viewer: "Clara", episode: 2, rating: 8 },
-  { viewer: "Rafael", episode: 1, rating: 6 },
-  { viewer: "Bia", episode: 2, rating: 10 },
-  { viewer: "Diego", episode: 3, rating: 7 },
-];
-const categories = [
-  ["all", "Explorar"],
-  ["movie", "Filmes"],
-  ["tv", "Séries"],
-  ["anime", "Animes"],
-];
-const labels: Record<string, string> = {
-  "demo-ultimo-rolo": "O Último Rolo",
-  "demo-mare-alta": "Maré Alta",
-  "demo-lua-de-papel": "Lua de Papel",
-  "demo-neon-norte": "Neon Norte",
-  "demo-fim-da-linha": "Fim da Linha",
-  "demo-arquipelago": "Arquipélago",
-};
+import { api } from "../lib/client-api";
+import type {
+  Community,
+  Dashboard,
+  Entry,
+  PendingViewing,
+  RankedSeries,
+  SeasonProgress,
+  Section,
+  Viewing,
+} from "../lib/dashboard-types";
+import { profileSections } from "../lib/dashboard-types";
+import { demoEpisodeRatings, demoEvaluations, demoSum, demoTitleNames } from "../lib/demo-community";
+import { displayRating, sessionDate, sessionTime } from "../lib/display-format";
+import { DiaryDialog } from "./diary-dialog";
+import { ReviewReader } from "./review-reader";
+import { CreditsPanel } from "./credits-panel";
+
 const empty: Entry = {
   title: "",
   watched: false,
@@ -118,345 +62,6 @@ const empty: Entry = {
   spoiler: false,
   version: 0,
 };
-const displayRating = (rating: number) => (rating / 2).toLocaleString("pt-BR");
-const sessionDate = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: "America/Sao_Paulo",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-const sessionTime = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: "America/Sao_Paulo",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-async function api<T>(path: string, method = "GET", body?: unknown, key?: string): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (key) headers["Idempotency-Key"] = key;
-  const response = await fetch("/api/v1/" + path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const data = await response.text();
-  const json = data ? JSON.parse(data) : null;
-  if (!response.ok) throw new Error(json?.message || "Não foi possível concluir a ação.");
-  return json;
-}
-type DiaryResult = { items: Viewing[]; hasMore: boolean };
-
-function LibraryPage({
-  section,
-  username,
-  dashboard,
-  render,
-}: {
-  section: "watchlist" | "watched";
-  username?: string;
-  dashboard: Dashboard;
-  render: (item: Entry, title?: Title) => ReactNode;
-}) {
-  const [page, setPage] = useState(1),
-    [attempt, retry] = useState(0);
-  const [result, setResult] = useState<{
-    page: number;
-    dashboard: Dashboard;
-    items: Entry[];
-    pages: number;
-    titles: Map<string, Title>;
-  } | null>(null);
-  const [error, setError] = useState("");
-  const strip = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    let active = true;
-    setError("");
-    const params = new URLSearchParams({ section, page: String(page) });
-    if (username) params.set("username", username);
-    (async () => {
-      const { items, pages } = await api<{ items: Entry[]; pages: number }>("library-page?" + params);
-      if (!active) return;
-      if (!items.length && page > 1) {
-        setPage(page - 1);
-        return;
-      }
-      const titles = items.length
-        ? await api<Title[]>("title-batch?ids=" + encodeURIComponent(items.map((i) => i.title).join(",")))
-        : [];
-      if (active) setResult({ page, dashboard, items, pages, titles: new Map(titles.map((t) => [t.id, t])) });
-    })().catch((e) => {
-      if (active) setError(e.message);
-    });
-    return () => {
-      active = false;
-    };
-  }, [section, username, dashboard, page, attempt]);
-  useEffect(() => {
-    if (strip.current) strip.current.scrollLeft = 0;
-  }, [page]);
-  if (error)
-    return (
-      <p role="alert">
-        {error} <button onClick={() => retry((n) => n + 1)}>Tentar novamente</button>
-      </p>
-    );
-  if (!result || result.page !== page || result.dashboard !== dashboard) return <p role="status">Carregando obras…</p>;
-  return (
-    <>
-      <div ref={strip} className="grid profile-card-strip">
-        {result.items.map((item) => render(item, result.titles.get(item.title)))}
-      </div>
-      {!result.items.length && (
-        <p className="muted">{section === "watchlist" ? "Nenhuma obra salva." : "Nenhuma avaliação ou obra vista."}</p>
-      )}
-      {result.pages > 1 && (
-        <nav className="row pagination" aria-label={"Páginas de " + (section === "watched" ? "Já vistos" : "Vou ver")}>
-          <button disabled={page === 1} onClick={() => setPage(1)} aria-label="Primeira página">
-            «
-          </button>
-          <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-            Anterior
-          </button>
-          <span aria-live="polite">
-            {page} de {result.pages}
-          </span>
-          <button disabled={page === result.pages} onClick={() => setPage(page + 1)}>
-            Próxima
-          </button>
-          <button disabled={page === result.pages} onClick={() => setPage(result.pages)} aria-label="Última página">
-            »
-          </button>
-        </nav>
-      )}
-    </>
-  );
-}
-
-function DiaryDialog({
-  dashboard,
-  username,
-  title,
-  name,
-  onClose,
-  renderSession,
-  visibility,
-  message,
-}: {
-  dashboard: Dashboard;
-  username?: string;
-  title: string;
-  name: string;
-  onClose: () => void;
-  renderSession: (item: Viewing) => ReactNode;
-  visibility: ReactNode;
-  message: string;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-    return () => element?.close();
-  }, []);
-  const [page, setPage] = useState(1);
-  const [attempt, retry] = useState(0);
-  const [result, setResult] = useState<{ dashboard: Dashboard; page: number; data: DiaryResult } | null>(null);
-  const [failure, setFailure] = useState("");
-  useEffect(() => {
-    let active = true;
-    setFailure("");
-    const params = new URLSearchParams({ page: String(page), title });
-    if (username) params.set("username", username);
-    (async () => {
-      const data = await api<DiaryResult>("diary?" + params);
-      if (!active) return;
-      if (!data.items.length && page > 1) {
-        setPage(page - 1);
-        return;
-      }
-      setResult({ dashboard, page, data });
-    })().catch((error) => {
-      if (active) setFailure(error.message);
-    });
-    return () => {
-      active = false;
-    };
-  }, [dashboard, page, username, title, attempt]);
-  const data = result?.page === page && result.dashboard === dashboard ? result.data : null;
-  function navigate(next: number) {
-    setFailure("");
-    setPage(next);
-  }
-  return (
-    <dialog
-      ref={dialog}
-      className="session-dialog diary-dialog"
-      aria-labelledby="diary-heading"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <header>
-        <h2 id="diary-heading">Diário · {name}</h2>
-        <div className="diary-toolbar">
-          {visibility && <span className="diary-visibility">Visibilidade do Diário {visibility}</span>}
-          <button autoFocus onClick={onClose}>
-            Fechar
-          </button>
-        </div>
-      </header>
-      {message && <p role="status">{message}</p>}
-      {data ? (
-        <>
-          <ul className="diary-sessions">{data.items.map(renderSession)}</ul>
-          {!data.items.length && <p className="muted">Nenhuma sessão registrada.</p>}
-        </>
-      ) : failure ? (
-        <div role="alert">
-          {failure}{" "}
-          <button
-            onClick={() => {
-              setFailure("");
-              retry((n) => n + 1);
-            }}
-          >
-            Tentar novamente
-          </button>
-        </div>
-      ) : (
-        <p role="status">Carregando sessões…</p>
-      )}
-      {(page > 1 || data?.hasMore) && (
-        <nav className="row diary-pagination" aria-label="Páginas do Diário">
-          <button disabled={page === 1} onClick={() => navigate(page - 1)}>
-            Anterior
-          </button>
-          <span aria-live="polite">Página {page}</span>
-          <button disabled={!data?.hasMore} onClick={() => navigate(page + 1)}>
-            Próxima
-          </button>
-        </nav>
-      )}
-    </dialog>
-  );
-}
-
-type SpoilerState = { spoiler: boolean; my_vote?: boolean | null };
-function ReviewReader({
-  name,
-  titleId,
-  author,
-  own,
-  watched,
-  text,
-  version,
-  initial,
-}: {
-  name?: string;
-  titleId: string;
-  author: string;
-  own: boolean;
-  watched: boolean;
-  text: string;
-  version: number;
-  initial: SpoilerState;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [reading, setReading] = useState(false);
-  const [state, setState] = useState(initial);
-  const [saving, setSaving] = useState(false),
-    [error, setError] = useState("");
-  async function vote(value: boolean) {
-    if (saving || state.my_vote === value) return;
-    setSaving(true);
-    setError("");
-    try {
-      setState(
-        await api<SpoilerState>("titles/" + titleId + "/spoiler-vote", "PUT", {
-          username: author,
-          version,
-          containsSpoiler: value,
-        }),
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-  const review = <Spoiler hidden={!own && !watched && state.spoiler}>{text}</Spoiler>;
-  const votes = (
-    <>
-      {!own && (
-        <div className="spoiler-votes" role="group" aria-label="Votar sobre spoiler na resenha">
-          {[true, false].map((value) => {
-            const label = value ? "Contém spoiler" : "Não contém spoiler";
-            return (
-              <IconAction
-                key={String(value)}
-                kind="spoiler"
-                iconActive={value}
-                active={state.my_vote === value}
-                label={label}
-                disabled={saving}
-                onClick={() => void vote(value)}
-              />
-            );
-          })}
-        </div>
-      )}
-      {error && (
-        <p className="message error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
-  );
-  const report = !own && <ReviewReport title={titleId} username={author} version={version} />;
-  if (!name)
-    return (
-      <>
-        {votes}
-        {review}
-        {report}
-      </>
-    );
-  return (
-    <>
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        aria-label={"Abrir resenha de " + name}
-        title="Abrir resenha"
-        onClick={() => {
-          setReading(true);
-          dialog.current?.showModal();
-        }}
-      >
-        <UiIcon name="review" />
-      </button>
-      <dialog
-        ref={dialog}
-        className="session-dialog profile-review-dialog"
-        aria-label={"Resenha de " + name}
-        onClose={() => setReading(false)}
-      >
-        <h2>Resenha de {name}</h2>
-        {reading && (
-          <>
-            {review}
-            {votes}
-            {report}
-          </>
-        )}
-        <form method="dialog" className="row">
-          <button>Fechar</button>
-        </form>
-      </dialog>
-    </>
-  );
-}
 export function App({
   chronology,
   monthlyReviews,
@@ -527,7 +132,7 @@ export function App({
     if (pendingViewing && !dialog?.open) dialog?.showModal();
     if (!pendingViewing && dialog?.open) dialog.close();
   }, [pendingViewing]);
-  const label = (id: string) => known[id]?.name ?? labels[id] ?? "Obra do catálogo";
+  const label = (id: string) => known[id]?.name ?? demoTitleNames[id] ?? "Obra do catálogo";
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : "Falha inesperada.");
   const rankingTab = tab === "ranking";
   const refresh = useCallback(async () => {
@@ -906,111 +511,15 @@ export function App({
   }
   return (
     <>
-      <header className="top">
-        <div className="wrap nav">
-          {authenticated && (
-            <CatalogDrawer
-              categories={categories.map(([id, name]) => [id, id === "all" ? "Explorar" : name])}
-              current={tab}
-              onSelect={changeTab}
-            />
-          )}
-          <button className="logo" onClick={() => changeTab("all")}>
-            <span className="mark">◈</span> cena<span>aberta</span>
-          </button>
-          <nav aria-label="Navegação principal">
-            {authenticated && (
-              <>
-                {categories.map(([id, name]) => (
-                  <button
-                    key={id}
-                    className={(tab === id ? "nav-active " : "") + "catalog-desktop-category"}
-                    onClick={() => changeTab(id)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </>
-            )}
-            <Link className="room-nav-link" href="/resenhas" aria-current={tab === "reviews" ? "page" : undefined}>
-              Resenhas
-            </Link>
-            <EditorialLinks onRecommendationsPage={tab === "recommendations"} />
-            {authenticated && (
-              <a className="room-nav-link" href="/salas">
-                <UiIcon name="card" />
-                Sélete
-              </a>
-            )}
-          </nav>
-          <div className={authenticated ? "account account-signed-in" : "account"}>
-            {authenticated ? (
-              <>
-                <NotificationBell />
-                <button
-                  type="button"
-                  className="nav-profile"
-                  aria-label="Meu perfil"
-                  title="Meu perfil"
-                  aria-current={tab === "profile" && !pageTitle && owned ? "page" : undefined}
-                  onClick={() => changeTab("profile")}
-                >
-                  {data?.profile ? (
-                    <ProfileAvatar name={data.profile.name} avatar={data.profile.avatar} />
-                  ) : (
-                    <span className="profile-avatar profile-initial" aria-hidden="true">
-                      <svg
-                        width="17"
-                        height="17"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      >
-                        <circle cx="12" cy="8" r="3.5" />
-                        <path d="M5 20v-1a7 7 0 0 1 14 0v1" />
-                      </svg>
-                    </span>
-                  )}
-                  <span className="nav-profile-label">Meu perfil</span>
-                </button>
-                <button
-                  type="button"
-                  className="nav-signout"
-                  aria-label="Sair"
-                  title="Sair da conta"
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5m3-12 4 4-4 4m-5-4h9" />
-                  </svg>
-                  <span>Sair</span>
-                </button>
-              </>
-            ) : emailAccounts ? (
-              <>
-                <a className="account-link nav-login" href="/conta">
-                  Entrar
-                </a>
-                <a className="account-link primary" href="/conta?modo=register">
-                  Criar conta
-                </a>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <MainHeader
+        authenticated={authenticated}
+        emailAccounts={emailAccounts}
+        tab={tab}
+        profile={data?.profile}
+        profileActive={tab === "profile" && !pageTitle && owned}
+        onCategory={changeTab}
+        onProfile={() => changeTab("profile")}
+      />
       <main className="wrap">
         {error && (
           <p role="alert" className="message error">
@@ -1176,7 +685,10 @@ export function App({
                     </div>
                   </div>
                   {!owned && current?.profile && (
-                    <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                    <>
+                      <ProfileFriend key={current.profile.username} username={current.profile.username} />
+                      <ProfileCompatibility username={current.profile.username} name={current.profile.name} />
+                    </>
                   )}
                   {owned && current?.profile && (
                     <>
@@ -1226,9 +738,10 @@ export function App({
                             <h2>Vou ver</h2>
                             {sectionVisibility("watchlist", "Vou ver")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watchlist"
+                            diaryVisible={false}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1259,9 +772,10 @@ export function App({
                             <h2>Já vistos e avaliações</h2>
                             {sectionVisibility("watched", "já vistos")}
                           </div>
-                          <LibraryPage
+                          <LibraryPage<Entry>
                             key={current.profile.username}
                             section="watched"
+                            diaryVisible={showSection("diary")}
                             dashboard={current}
                             username={owned ? undefined : current.profile.username}
                             render={(item, saved) => {
@@ -1322,6 +836,13 @@ export function App({
                             }}
                           />
                         </section>
+                      )}
+                      {showSection("lists") && (
+                        <ProfileLists
+                          key={current.profile.username}
+                          username={owned ? undefined : current.profile.username}
+                          visibility={sectionVisibility("lists", "listas")}
+                        />
                       )}
                       {diaryTitle && showSection("diary") && (
                         <DiaryDialog
@@ -1459,6 +980,9 @@ export function App({
                 <h2>{title.name}</h2>
                 <p>{title.summary || "Sinopse indisponível."}</p>
                 <FilmFacts title={title} />
+                {(title.format === "movie" || title.format === "tv") && (
+                  <TrailerButton key={"trailer-" + title.id} titleId={title.id} titleName={title.name} />
+                )}
                 {data?.profile && (
                   <>
                     <div className="row">
@@ -1555,6 +1079,15 @@ export function App({
                         )}
                       </div>
                     )}
+                    <div className="row title-social-actions">
+                      <AddToCollection key={"collection-" + title.id} titleId={title.id} name={title.name} />
+                      <RecommendTitle
+                        key={"recommend-" + title.id}
+                        titleId={title.id}
+                        name={title.name}
+                        username={data.profile.username}
+                      />
+                    </div>
                     {entry.watched && (
                       <div className="form">
                         {title.format === "tv" ? (
@@ -1571,7 +1104,7 @@ export function App({
                         )}
                         {title.format !== "tv" && title.format !== "seas" && (
                           <StarRating
-                            key={title.id}
+                            key={"rating-" + title.id}
                             disabled={busy}
                             value={entry.rating}
                             onChange={(rating) => {
@@ -1580,7 +1113,7 @@ export function App({
                           />
                         )}
                         <ReviewEditor
-                          key={title.id}
+                          key={"review-" + title.id}
                           title={title.id}
                           initial={entry}
                           disabled={busy}
@@ -1597,9 +1130,13 @@ export function App({
                 )}
               </div>
             </div>
-            {title.format === "tv" && <SeriesSeasons key={title.id} title={title.id} />}
+            {title.format === "tv" && <SeriesSeasons key={"seasons-" + title.id} title={title.id} />}
             {chronology}
             {!!title.details?.people?.length && <WorkPeople people={title.details.people} titleId={title.id} />}
+            {(title.format === "movie" || title.format === "tv") && (
+              <WhereToWatch key={"watch-" + title.id} titleId={title.id} signedIn={!!data?.profile} />
+            )}
+            {data?.profile && <TitleFriends key={"friends-" + title.id} titleId={title.id} watched={entry.watched} />}
             {community && (
               <section className="community" aria-labelledby="community-heading">
                 <h3 id="community-heading">Comunidade</h3>
@@ -1639,6 +1176,13 @@ export function App({
                       watched={entry.watched}
                       text={review.review}
                       version={review.version}
+                      initial={review}
+                    />
+                    <ReviewSocial
+                      key={[title.id, review.username, review.likes, review.liked, review.comments].join("-")}
+                      titleId={title.id}
+                      author={review.username}
+                      own={review.username === data?.profile?.username}
                       initial={review}
                     />
                   </article>
@@ -1811,29 +1355,7 @@ export function App({
             </>
           )}
         </dialog>
-        {credits && (
-          <section className="panel">
-            <h2>Sobre o alpha</h2>
-            <p>
-              Cena Aberta é um diário audiovisual em desenvolvimento. O catálogo de demonstração usa obras fictícias.
-            </p>
-            <p>
-              <a href="https://www.themoviedb.org/">
-                <img
-                  src="https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
-                  width={88}
-                  alt="The Movie Database"
-                />
-              </a>
-            </p>
-            <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
-            <p>
-              A visibilidade das seções é definida por você no perfil. Novas notas e resenhas são públicas por padrão.
-              Você pode tornar cada avaliação privada pelo controle de visibilidade. Somente as seções habilitadas ficam
-              visíveis para quem visita seu perfil.
-            </p>
-          </section>
-        )}
+        {credits && <CreditsPanel />}
       </main>
       <footer className="wrap footer">
         <span>Cena Aberta · Alpha</span>

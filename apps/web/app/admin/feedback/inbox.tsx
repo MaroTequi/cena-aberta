@@ -137,14 +137,6 @@ export function FeedbackInbox() {
   }
   return (
     <main className="wrap feedback-inbox">
-      <header className="room-header">
-        <a href="/" className="account-brand">
-          Cena Aberta
-        </a>
-        <a href="/?aba=profile" className="room-nav-button">
-          Meu perfil
-        </a>
-      </header>
       <span className="room-eyebrow">ADMINISTRAÇÃO</span>
       <h1>Feedback da comunidade</h1>
       <p>Relatos privados de bugs e sugestões.</p>

@@ -1,0 +1,17 @@
+/* Janelas (dialog) e listas suspensas rolam com a roda do mouse, o toque e o teclado, mas sem a barra de
+   rolagem lateral aparecendo. Vale para a janela em si e para qualquer área com rolagem dentro dela. */
+dialog,
+dialog *,
+.header-search-panel,
+.account-menu-panel,
+.catalog-suggestions {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+dialog::-webkit-scrollbar,
+dialog *::-webkit-scrollbar,
+.header-search-panel::-webkit-scrollbar,
+.account-menu-panel::-webkit-scrollbar,
+.catalog-suggestions::-webkit-scrollbar {
+  display: none;
+}

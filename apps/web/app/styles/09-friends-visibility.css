@@ -1,0 +1,189 @@
+.friends-page {
+  max-width: 900px;
+  padding-bottom: 50px;
+}
+.friends-page > .panel {
+  margin-bottom: 20px;
+}
+.friend-search {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+}
+.friend-search label {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.friend-search input {
+  width: 100%;
+}
+.friend-search button {
+  min-height: 46px;
+}
+.friend-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.friend-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  text-decoration: none;
+}
+.friend-person > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.friend-person .profile-avatar {
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+.friend-person small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.friend-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.friend-actions button {
+  min-height: 44px;
+}
+.friend-badge {
+  font-size: 0.75rem;
+  color: #a4dbb8;
+}
+.friend-count {
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: #eab56818;
+  padding: 4px 9px;
+  border-radius: 20px;
+}
+.friend-results {
+  margin-top: 24px;
+}
+@media (max-width: 600px) {
+  .friend-card {
+    align-items: start;
+    flex-direction: column;
+  }
+  .friend-actions {
+    width: 100%;
+  }
+  .friend-search {
+    flex-wrap: wrap;
+  }
+  .friend-search label {
+    flex-basis: 100%;
+  }
+  .friend-search button {
+    width: 100%;
+  }
+}
+
+.rating-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 9px;
+  border-radius: 12px;
+}
+.rating-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.profile-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0;
+}
+.profile-shortcuts > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.profile-shortcuts .room-nav-button {
+  padding: 10px 14px;
+  min-height: 46px;
+}
+.visibility-toggle,
+.room-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 9px;
+  border-radius: 12px;
+  flex: none;
+}
+.visibility-toggle[aria-pressed="true"] {
+  color: #9bd8af;
+  border-color: #42765a;
+}
+.visibility-toggle[aria-pressed="false"] {
+  color: var(--muted);
+}
+.profile-visibility-all {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 18px 0 24px;
+}
+.profile-visibility-all small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.room-list-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.room-list-row .room-list-item {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.room-delete {
+  color: #f1aaa4;
+}
+.public-ranking-tier {
+  border-left: 3px solid var(--line);
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+.public-ranking-tier h4 {
+  margin: 0 0 10px;
+}
+.public-ranking-cards {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.public-ranking-cards .catalog-card {
+  flex: 0 0 110px;
+}
+.rating-row {
+  flex-wrap: wrap;
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./style.css";
 import "./christmas.css";
+import "./user-features.css";
 import { ThemeSync } from "./theme-picker";
 import { FeedbackWidget } from "./feedback-widget";
 import { version } from "../package.json";

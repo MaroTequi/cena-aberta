@@ -9,10 +9,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import static br.com.cenaaberta.Guards.*;
 
-/** Sessões de visualização (viewings) do diário. */
+/** Diário: registro, edição e exclusão de sessões de visualização (viewings) e leitura paginada do diário. */
 @RestController
 public class Diary {
 
@@ -24,10 +25,28 @@ public class Diary {
     private final IdempotencyReceipts receipts;
     private final LibraryEntries entries;
     private final Episodes episodes;
+    private final Viewings viewings;
+    private final ProfileVisibilities visibilities;
 
     /** LibraryEntries é necessário porque createViewing garante a linha da biblioteca antes de registrar. */
-    Diary(JdbcTemplate db,ActiveActors actors,IdempotencyReceipts receipts,LibraryEntries entries,Episodes episodes) { this.episodes=episodes;
+    Diary(JdbcTemplate db,ActiveActors actors,IdempotencyReceipts receipts,LibraryEntries entries,Episodes episodes,
+          Viewings viewings,ProfileVisibilities visibilities) { this.episodes=episodes;
         this.db=db; this.actors=actors; this.receipts=receipts; this.entries=entries;
+        this.viewings=viewings; this.visibilities=visibilities;
+    }
+
+    @GetMapping("/diary")
+    Viewings.DiaryPage diary(@RequestHeader("X-Actor") String actor, @RequestParam int page,
+                    @RequestParam(required=false) String username, @RequestParam(required=false) String title) {
+        actors.requireActive(actor);
+        if (page < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        if (title != null) validateTitle(title);
+        if (username == null) return viewings.page(actor, page, title);
+        var target = Rows.one(db,"select actor from profile where username=? and active=true", ProfileFields.username(username));
+        String owner = (String)target.get("actor");
+        if (!Boolean.TRUE.equals(visibilities.read(owner).get("diary")))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        return viewings.page(owner, page, title);
     }
 
     @PostMapping("/me/viewings")
@@ -51,17 +70,10 @@ public class Diary {
         if(!input.rewatch()||!canRewatch)
             fail(HttpStatus.CONFLICT,seasonKey.matches()?"Registre duas sessões de cada episódio primeiro.":"Marque Vi novamente para registrar outra sessão.");
 
-        String id=insertViewing(actor,input.title(),date,true,input.watchedAt());
+        String id=viewings.insert(actor,input.title(),date,true,input.watchedAt());
         entries.markWatched(actor,input.title());
         receipts.save(actor,"viewing",key,input,id);
         return Map.of("id",id);
-    }
-    /** Insere uma sessão no diário e devolve o id gerado. */
-    public String insertViewing(String actor,String title,LocalDate date,boolean rewatch,OffsetDateTime watchedAt) {
-        String id=UUID.randomUUID().toString();
-        db.update("insert into viewing(id,actor,title,watched_on,rewatch,watched_at) values(?,?,?,?,?,?)",
-            id,actor,title,date,rewatch,watchedAt);
-        return id;
     }
     @PutMapping("/me/viewings/{id}")
     @Transactional

@@ -29,7 +29,7 @@ final class TmdbMapper {
 
             date.length() >= 4 ? date.substring(0,4) : "",item.path("overview").asText(""),
 
-            Catalog.posterUrl(item,"w500"));
+            posterUrl(item,"w500"));
 
     }
 
@@ -51,7 +51,7 @@ final class TmdbMapper {
 
             movie?null:positive(item.path("number_of_seasons")),movie?null:positive(item.path("number_of_episodes")),
 
-            movie?names(credits.path("crew"),"Director",5):List.of(),names(item.path("created_by"),null,5),names(credits.path("cast"),null,8),Catalog.people(item));
+            movie?names(credits.path("crew"),"Director",5):List.of(),names(item.path("created_by"),null,5),names(credits.path("cast"),null,8),people(item));
 
     }
 
@@ -79,5 +79,51 @@ final class TmdbMapper {
 
         return List.copyOf(names);
 
+    }
+
+    static String posterUrl(JsonNode item,String size){
+        return imageUrl(item,"poster_path",size);
+    }
+
+    static String imageUrl(JsonNode item,String field,String size){
+        String path=item.path(field).asText("");
+        return path.matches("/[A-Za-z0-9._-]+")?"https://image.tmdb.org/t/p/"+size+path:null;
+    }
+
+    static String portrait(JsonNode item){
+        String path=item.path("profile_path").asText("");
+        return path.matches("/[A-Za-z0-9._-]+")?"https://image.tmdb.org/t/p/w185"+path:null;
+    }
+
+    static String text(JsonNode item,String field){ return item.path(field).asText(""); }
+
+    private static void addPerson(Map<Long,Catalog.PersonCredit> group,JsonNode item,List<String> roles,boolean acting){
+        long id=item.path("id").asLong();
+        if(id<=0||text(item,"name").isBlank()||roles.isEmpty())return;
+        var person=group.computeIfAbsent(id,key->new Catalog.PersonCredit(id,text(item,"name"),portrait(item),new ArrayList<>(),acting));
+        for(String role:roles)if(!role.isBlank()&&!person.roles().contains(role))person.roles().add(role);
+    }
+
+    static List<String> roles(JsonNode item,boolean acting){
+        String field=acting?"character":"job";
+        var result=new LinkedHashSet<String>();
+        for(var entry:item.path(acting?"roles":"jobs")){
+            if(!text(entry,field).isBlank())result.add(text(entry,field));
+        }
+        if(!text(item,field).isBlank())result.add(text(item,field));
+        if(acting&&result.isEmpty())result.add("Acting");
+        return List.copyOf(result);
+    }
+
+    static List<Catalog.PersonCredit> people(JsonNode item){
+        var cast=new LinkedHashMap<Long,Catalog.PersonCredit>();
+        var crew=new LinkedHashMap<Long,Catalog.PersonCredit>();
+        var credits=item.path("aggregate_credits").isObject()?item.path("aggregate_credits"):item.path("credits");
+        for(var row:credits.path("cast"))addPerson(cast,row,roles(row,true),true);
+        for(var row:item.path("created_by"))addPerson(crew,row,List.of("Creator"),false);
+        for(var row:credits.path("crew"))addPerson(crew,row,roles(row,false),false);
+        var result=new ArrayList<>(cast.values());
+        result.addAll(crew.values());
+        return result;
     }
 }

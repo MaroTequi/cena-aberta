@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Cena Aberta",
+    "slug": "cena-aberta",
+    "scheme": "cenaaberta",
+    "version": "0.1.1",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "br.com.cenaaberta.mobile",
+      "versionCode": 2
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "web": {
+      "output": "static",
+      "lang": "pt-BR"
+    }
+  }
+}

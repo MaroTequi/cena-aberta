@@ -13,11 +13,10 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Testes de caracterização do Catalog: fixam o comportamento atual (modo demo e TMDB falso). */
+/** Testes de caracterização das obras do catálogo (Titles): fixam o comportamento atual (modo demo e TMDB falso). */
 class CatalogTest {
- static final String SECRET="x".repeat(24);
  JdbcTemplate db;HttpServer tmdb;volatile int status;volatile String body;
- Catalog catalog;
+ Titles catalog;
 
  @BeforeEach void setup() throws Exception {
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
@@ -37,8 +36,9 @@ class CatalogTest {
  }
  @AfterEach void teardown(){tmdb.stop(0);}
 
- Catalog demo(){return new Catalog(db,new ObjectMapper(),SECRET,"","http://127.0.0.1:"+tmdb.getAddress().getPort());}
- Catalog remote(){return new Catalog(db,new ObjectMapper(),SECRET,"fake","http://127.0.0.1:"+tmdb.getAddress().getPort());}
+ Titles demo(){return titles("");}
+ Titles remote(){return titles("fake");}
+ Titles titles(String token){var mapper=new ObjectMapper();var client=new TmdbClient(mapper,token,"http://127.0.0.1:"+tmdb.getAddress().getPort());return new Titles(db,mapper,client,new TitleSummaries(db),new StreamingAvailability(client));}
  @SuppressWarnings("unchecked") static List<Catalog.Title> items(Map<String,Object> result){return (List<Catalog.Title>)result.get("items");}
 
  @Test void rejectsInvalidSearchParameters(){
@@ -46,9 +46,6 @@ class CatalogTest {
  ()->catalog.titles("","all",0),()->catalog.titles("","all",501),
  ()->catalog.titles("a".repeat(101),"all",1),()->catalog.titles("","x",1)))
  assertEquals(400,assertThrows(ResponseStatusException.class,call).getStatusCode().value());
- }
- @Test void constructorRejectsShortSecret(){
- assertThrows(IllegalArgumentException.class,()->new Catalog(db,new ObjectMapper(),"x".repeat(23),"","http://127.0.0.1:1"));
  }
  @Test void demoSearchIgnoresAccentsAndPagesBeyondOneAreEmpty(){
  var first=catalog.titles("ultimo","all",1);
@@ -86,5 +83,33 @@ class CatalogTest {
  }
  status=404;
  assertEquals(404,assertThrows(ResponseStatusException.class,()->service.detail("tmdb-movie-1")).getStatusCode().value());
+ }
+ @Test void batchWithoutDetailsFlagKeepsDetailsNull(){
+ assertNull(catalog.batch(List.of("demo-ultimo-rolo"),0,null,false,null).getFirst().details());
+ }
+ @Test void batchWithDetailsUsesFixturesStoredJsonAndGenreFallback(){
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,details) values('tmdb-movie-10','movie',false,'Dez','Dez','2001','',null,?)",
+ "{\"genres\":[\"Crime\"],\"runtime\":120,\"seasons\":null,\"episodes\":null,\"directors\":[],\"creators\":[],\"cast\":[]}");
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,genre_ids) values('tmdb-movie-11','movie',false,'Onze','Onze','2002','',null,'28,99999')");
+ var found=catalog.batch(List.of("demo-ultimo-rolo","tmdb-movie-10","tmdb-movie-11","tmdb-movie-12"),0,null,true,null);
+ assertEquals(3,found.size());
+ var byId=new HashMap<String,Catalog.Title>();for(var t:found)byId.put(t.id(),t);
+ assertEquals(96,byId.get("demo-ultimo-rolo").details().runtime());
+ assertEquals(List.of("Crime"),byId.get("tmdb-movie-10").details().genres());
+ assertEquals(120,byId.get("tmdb-movie-10").details().runtime());
+ assertEquals(List.of("Ação"),byId.get("tmdb-movie-11").details().genres());
+ assertNull(byId.get("tmdb-movie-11").details().runtime());
+ }
+ @Test void batchWithDetailsFetchesMissingDetailsFromTmdbAndToleratesFailure(){
+ db.update("insert into title(id,format,anime,name,original,release_year,summary,poster,genre_ids) values('tmdb-movie-603','movie',false,'Matrix','Matrix','1999','',null,'28')");
+ body="""
+ {"id":603,"title":"Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"x","runtime":136,
+ "genres":[{"id":28,"name":"Ação"}],"original_language":"en","credits":{"cast":[],"crew":[]}}""";
+ assertEquals(136,remote().batch(List.of("tmdb-movie-603"),0,null,true,null).getFirst().details().runtime());
+ db.update("update title set details=null");
+ status=500;
+ var fallback=remote().batch(List.of("tmdb-movie-603"),0,null,true,null).getFirst().details();
+ assertEquals(List.of("Ação"),fallback.genres());
+ assertNull(fallback.runtime());
  }
 }

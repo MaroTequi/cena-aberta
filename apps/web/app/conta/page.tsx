@@ -1,7 +1,9 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { returnPath } from "../../lib/return-path";
-import { signIn } from "next-auth/react";
+import { getProviders, signIn } from "next-auth/react";
+import { googleErrors } from "../../lib/google-login";
 
 type Mode = "login" | "register" | "reset";
 
@@ -13,7 +15,21 @@ export default function Conta() {
   const [busy, setBusy] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
   const [resetUntil, setResetUntil] = useState(0),
-    [remaining, setRemaining] = useState(0);
+    [remaining, setRemaining] = useState(0),
+    [google, setGoogle] = useState(false);
+  useEffect(() => {
+    let active = true;
+    getProviders()
+      .then((providers) => {
+        if (active) setGoogle(!!providers?.google);
+      })
+      .catch(() => {
+        // Sem a lista de provedores, a tela fica só com e-mail e senha.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     const update = () => setRemaining(Math.max(0, Math.ceil((resetUntil - Date.now()) / 1000)));
     update();
@@ -31,6 +47,8 @@ export default function Conta() {
     if (accountState === "paused") setMessage("Conta pausada. Entre novamente para reativá-la.");
     if (accountState === "deleted") setMessage("Conta marcada como deletada. O acesso foi encerrado.");
     if (accountState === "active") setMessage("Conta reativada. Entre para continuar.");
+    const googleError = googleErrors[params.get("erro") ?? ""];
+    if (googleError) setError(googleError);
     const destination = returnPath(params.get("next"));
     if (destination !== "/") sessionStorage.setItem("room-return", destination);
     const fragment = new URLSearchParams(location.hash.slice(1));
@@ -156,9 +174,9 @@ export default function Conta() {
   return (
     <main className="wrap account-page">
       <section className="panel account-panel" aria-labelledby="account-title">
-        <a className="account-brand" href="/">
+        <Link className="account-brand" href="/">
           <span aria-hidden="true">◈</span> Cena Aberta
-        </a>
+        </Link>
         <h1 id="account-title">{title}</h1>
         <p className="account-description">{description}</p>
         {error && (
@@ -244,6 +262,40 @@ export default function Conta() {
                       : "Enviar link de confirmação"}
           </button>
         </form>
+        {google && mode !== "reset" && !token && (
+          <div className="account-google">
+            <span className="account-divider">ou</span>
+            <button
+              type="button"
+              className="account-google-button"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void signIn("google", { callbackUrl: returnPath(sessionStorage.getItem("room-return")) });
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                <path
+                  fill="#EA4335"
+                  d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.7 17.7 9.5 24 9.5z"
+                />
+                <path
+                  fill="#4285F4"
+                  d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C.9 16.6 0 20.2 0 24s.9 7.4 2.6 10.7l7.9-6.1z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"
+                />
+              </svg>
+              {mode === "register" ? "Criar conta com Google" : "Entrar com Google"}
+            </button>
+          </div>
+        )}
         {mode === "reset" ? (
           <nav className="account-recovery-nav" aria-label="Opções de acesso">
             <button type="button" className="account-recovery-back" onClick={() => change("login")} disabled={busy}>

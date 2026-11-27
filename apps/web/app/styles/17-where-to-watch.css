@@ -1,0 +1,61 @@
+/* Onde assistir, seletor de streamings e filtro das salas */
+.where-to-watch-group h4 {
+  margin: 14px 0 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.where-to-watch-group ul,
+.provider-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.provider-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.provider-chip.provider-mine,
+button.provider-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+button.provider-chip[aria-pressed="true"]::after {
+  content: "✓";
+  color: var(--accent);
+  font-weight: 700;
+}
+.provider-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex: none;
+  object-fit: cover;
+}
+.provider-logo-initial {
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  font-weight: 700;
+}
+.where-to-watch-included {
+  color: var(--accent);
+  font-weight: 600;
+}
+.where-to-watch-credit {
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.room-filter-warning {
+  color: var(--accent);
+}

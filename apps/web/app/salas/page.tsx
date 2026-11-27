@@ -1,3 +1,4 @@
+import { UserPageHeader } from "../user-pages";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "../../lib/auth";
@@ -11,5 +12,10 @@ export default async function Rooms({ searchParams }: { searchParams: Promise<{ 
   const session = (await getServerSession(authOptions)) as { actor?: string } | null;
   if (!session?.actor) redirect("/conta?next=" + encodeURIComponent(next));
   const { name, avatar } = await requireProfile(session.actor, next);
-  return <MovieRoom id={id} profile={{ name, avatar }} />;
+  return (
+    <>
+      <UserPageHeader tab="rooms" knownProfile={{ name, avatar }} />
+      <MovieRoom id={id} profile={{ name, avatar }} />
+    </>
+  );
 }

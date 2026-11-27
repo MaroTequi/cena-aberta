@@ -1,4 +1,6 @@
-import { EditorialLinks } from "../editorial-links";
+import { getServerSession } from "next-auth";
+import { authOptions, emailAccounts } from "../../lib/auth";
+import { UserPageHeader } from "../user-pages";
 import { EditorialImage } from "../editorial-image";
 import type { Metadata } from "next";
 import "./news.css";
@@ -11,19 +13,13 @@ export const metadata: Metadata = {
 export default async function News({ searchParams }: { searchParams: Promise<{ tema?: string }> }) {
   const { tema } = await searchParams;
   const selected = topics.find((s) => s.slug === tema);
-  const { items, failed } = await newsFeed(selected?.slug);
+  const [{ items, failed }, session] = await Promise.all([
+    newsFeed(selected?.slug),
+    getServerSession(authOptions) as Promise<{ actor?: string } | null>,
+  ]);
   return (
     <>
-      <header className="top">
-        <div className="wrap nav">
-          <a className="logo" href="/">
-            <span className="mark">◈</span> cena<span>aberta</span>
-          </a>
-          <nav aria-label="Navegação principal">
-            <EditorialLinks onNewsPage />
-          </nav>
-        </div>
-      </header>
+      <UserPageHeader authenticated={Boolean(session?.actor)} emailAccounts={emailAccounts} tab="news" />
       <main className="wrap news-page">
         <h1>Notícias</h1>
         <nav className="news-topics" aria-label="Filtrar notícias por tema">

@@ -1,3 +1,4 @@
+import { UserPageHeader } from "../../user-pages";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "../../../lib/auth";
@@ -11,5 +12,10 @@ export default async function AdminFeedback() {
     cache: "no-store",
   });
   if (!r.ok || !(await r.json()).admin) redirect("/");
-  return <FeedbackInbox />;
+  return (
+    <>
+      <UserPageHeader />
+      <FeedbackInbox />
+    </>
+  );
 }

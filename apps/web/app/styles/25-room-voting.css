@@ -1,0 +1,137 @@
+/* Sala em votação: participantes à esquerda, a obra da vez no meio (pôster ao lado do título, sinopse e
+   botões) e os matches à direita, tudo numa tela de computador. No celular continua o cartão empilhado. */
+.room-film-info {
+  display: none;
+}
+@media (min-width: 1000px) {
+  .rooms-page:has(.room-stage-voting) {
+    max-width: 1240px;
+    padding-top: 12px;
+    padding-bottom: 24px;
+  }
+  .room-stage-voting {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr) 240px;
+    gap: 16px;
+    align-items: start;
+  }
+  .room-stage-voting > .room-reconsider {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .room-stage-voting > .room-people {
+    grid-column: 1;
+    margin: 0;
+    padding: 16px;
+  }
+  .room-stage-voting > .room-people h2 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+  }
+  .room-stage-voting .room-members {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .room-stage-voting .room-member-link {
+    min-height: 0;
+    padding: 6px;
+  }
+  .room-stage-voting .room-members .profile-avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .room-stage-voting > .room-play {
+    display: contents;
+  }
+  .room-stage-voting .room-swipe-area {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    column-gap: 24px;
+    row-gap: 12px;
+    height: min(calc(100dvh - 226px), 600px);
+    min-height: 360px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+  }
+  .room-stage-voting .room-progress {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .room-stage-voting .room-swipe-card {
+    grid-column: 1;
+    grid-row: 2 / span 4;
+    align-self: start;
+    height: min(100%, 400px);
+    min-height: 0;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    border-radius: 16px;
+  }
+  .room-stage-voting .room-card-caption {
+    display: none;
+  }
+  .room-stage-voting .room-film-info {
+    display: block;
+    grid-column: 2;
+  }
+  .room-film-info span {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .room-film-info h2 {
+    margin: 2px 0 0;
+    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+    line-height: 1.15;
+  }
+  .room-stage-voting .room-summary {
+    grid-column: 2;
+    align-self: stretch;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .room-stage-voting .room-vote-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .room-stage-voting .room-vote-actions button {
+    min-width: 140px;
+    min-height: 52px;
+  }
+  .room-stage-voting .room-hint {
+    grid-column: 2;
+    margin: 0;
+    text-align: left;
+  }
+  .room-stage-voting .room-swipe-area > .panel {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .room-stage-voting .room-matches {
+    grid-column: 3;
+    max-height: min(calc(100dvh - 226px), 600px);
+    margin: 0;
+    padding: 16px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .room-stage-voting .room-matches h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+  .room-stage-voting .room-matches > p {
+    margin: 4px 0 10px;
+    font-size: 0.85rem;
+  }
+}

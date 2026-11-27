@@ -15,12 +15,13 @@ class MonthlyReleasesTest {
         var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
         new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__catalog.sql"),new ClassPathResource("db/migration/V4__review_release_dates.sql")).execute(source);
         var db=new JdbcTemplate(source);
-        var catalog=new Catalog(db,new ObjectMapper(),"a".repeat(24),"","");
+        var mapper=new ObjectMapper();
+        var catalog=new Releases(db,mapper,new TmdbClient(mapper,"",""),new TitleSummaries(db));
         var today=LocalDate.now(ZoneId.of("America/Sao_Paulo"));
         var ids=List.of("tmdb-tv-1","tmdb-movie-2","tmdb-tv-3","tmdb-movie-4","tmdb-tv-5");
         var dates=Arrays.asList(today.withDayOfMonth(1),today,today.plusDays(1),today.withDayOfMonth(1).minusDays(1),null);
         for(int i=0;i<ids.size();i++)
             db.update("insert into review_release_date values(?,?,?,CURRENT_TIMESTAMP)",ids.get(i),"Obra",dates.get(i));
-        assertEquals(ids.subList(0,2),catalog.reviewReleases(ids).stream().map(Catalog.ReviewRelease::id).toList());
+        assertEquals(ids.subList(0,2),catalog.reviewReleases(ids).stream().map(Releases.ReviewRelease::id).toList());
     }
 }

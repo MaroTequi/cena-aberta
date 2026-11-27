@@ -1,3 +1,4 @@
+import Link from "next/link";
 export default function Credits() {
   return (
     <main className="wrap">
@@ -46,7 +47,17 @@ export default function Credits() {
             <a href="https://game-icons.net/1x1/lorc/vintage-robot.html">Robô retrô</a> — Lorc
           </li>
         </ul>
-        <a href="/">Cena Aberta</a>
+        <h2>Onde assistir</h2>
+        <p>
+          A disponibilidade das obras em serviços de streaming no Brasil é fornecida pela{" "}
+          <a href="https://www.justwatch.com/br">JustWatch</a>, por meio do TMDB.
+        </p>
+        <h2>Trailers</h2>
+        <p>
+          Os trailers são vídeos publicados no <a href="https://www.youtube.com/">YouTube</a> e exibidos pelo player
+          oficial, sem cookies até você dar o play. A lista de vídeos de cada obra vem do TMDB.
+        </p>
+        <Link href="/">Cena Aberta</Link>
       </section>
     </main>
   );

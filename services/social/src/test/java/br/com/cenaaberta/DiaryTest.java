@@ -20,7 +20,7 @@ class DiaryTest {
  db.update("insert into profile(actor,username,name) values(?,?,?)",BEA,"bea","Bea");
  db.update("insert into library(actor,title,watched,rewatching) values(?,?,true,true)",ANA,TITLE);
  var actors=new ActiveActors(db);
- service=new Diary(db,actors,new IdempotencyReceipts(db,new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()),new LibraryEntries(db,id->id),org.mockito.Mockito.mock(Episodes.class));
+ service=new Diary(db,actors,new IdempotencyReceipts(db,new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()),new LibraryEntries(db,id->id),org.mockito.Mockito.mock(Episodes.class),new Viewings(db),new ProfileVisibilities(db));
  }
  void assertFails(HttpStatus status,String message,Runnable call){
  var e=assertThrows(ResponseStatusException.class,call::run);

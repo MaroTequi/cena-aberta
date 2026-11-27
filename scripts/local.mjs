@@ -25,7 +25,7 @@ const socialKey=randomUUID();
 const running=[];
 const mailKeys=["INVITE_ONLY","INVITED_EMAILS","EMAIL_MODE","FRONTEND_URL","SMTP_HOST","SMTP_PORT","SMTP_USERNAME","SMTP_PASSWORD","SMTP_AUTH","SMTP_STARTTLS","MAIL_FROM"];
 const mailEnvironment=Object.fromEntries(mailKeys.map(key=>[key,process.env[key]??localSettings[key]??""]).filter(([,value])=>value!==""));
-const sharedEnvironment=Object.fromEntries(Object.entries(process.env).filter(([key])=>!["TMDB_TOKEN","NEXTAUTH_SECRET"].includes(key)&&!mailKeys.includes(key)));
+const sharedEnvironment=Object.fromEntries(Object.entries(process.env).filter(([key])=>!["TMDB_TOKEN","NEXTAUTH_SECRET","GOOGLE_CLIENT_SECRET"].includes(key)&&!mailKeys.includes(key)));
 function start(command,args,env,cwd) {
   const child=spawn(command,args,{cwd,env:{...sharedEnvironment,...env},stdio:"inherit"});
   running.push(child);
@@ -45,6 +45,6 @@ start("java",["-jar","services/catalog/target/catalog-0.1.0-alpha.jar"],{PORT:"8
 start("java",["-jar","services/social/target/social-0.1.0-alpha.jar"],{PORT:"8182",BIND_ADDRESS:"127.0.0.1",INTERNAL_SECRET:socialKey,CATALOG_INTERNAL_SECRET:catalogKey,CATALOG_URL:"http://127.0.0.1:8181",EMAIL_MODE:"log",...mailEnvironment});
 start(process.execPath,["node_modules/next/dist/bin/next","start","--port","3000","--hostname","127.0.0.1"],{
   NEXTAUTH_URL:"http://localhost:3000",NEXTAUTH_SECRET:sessionSecret,
-  OIDC_ISSUER:"",EMAIL_ACCOUNTS:process.env.EMAIL_ACCOUNTS??localSettings.EMAIL_ACCOUNTS??"true",CATALOG_URL:"http://127.0.0.1:8181",SOCIAL_URL:"http://127.0.0.1:8182",
+  OIDC_ISSUER:"",GOOGLE_CLIENT_ID:process.env.GOOGLE_CLIENT_ID??localSettings.GOOGLE_CLIENT_ID??"",GOOGLE_CLIENT_SECRET:process.env.GOOGLE_CLIENT_SECRET??localSettings.GOOGLE_CLIENT_SECRET??"",EMAIL_ACCOUNTS:process.env.EMAIL_ACCOUNTS??localSettings.EMAIL_ACCOUNTS??"true",CATALOG_URL:"http://127.0.0.1:8181",SOCIAL_URL:"http://127.0.0.1:8182",
   CATALOG_INTERNAL_SECRET:catalogKey,SOCIAL_INTERNAL_SECRET:socialKey,
 },"apps/web");

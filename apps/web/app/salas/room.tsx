@@ -1,5 +1,5 @@
 "use client";
-import { NotificationBell } from "../notification-bell";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { RoomFriends } from "./room-friends";
 import { UiIcon } from "../ui-icons";
@@ -37,6 +37,8 @@ type Room = {
     supporters: { isSelf?: boolean; username: string; name: string; avatar?: string }[];
   }[];
   genres?: number[];
+  subscribedOnly?: boolean;
+  providerCount?: number;
   genre: number;
   id: string;
   name: string;
@@ -288,21 +290,10 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
       setNotice("Copie o link abaixo para convidar.");
     }
   }
+  const compactIntro = room?.status === "lobby" || room?.status === "voting";
   return (
     <main className="wrap rooms-page">
-      <header className="room-header">
-        <a href="/" className="account-brand">
-          Cena Aberta
-        </a>
-        <div className="row">
-          <NotificationBell />
-          <a className="room-nav-button room-profile-link" href="/?aba=profile">
-            <ProfileAvatar name={profile.name} avatar={profile.avatar} />
-            Meu perfil
-          </a>
-        </div>
-      </header>
-      <div className="room-intro">
+      <div className={compactIntro ? "room-intro room-intro-compact" : "room-intro"}>
         <span className="room-eyebrow">UMA ESCOLHA, TODO MUNDO JUNTO</span>
         <h1>
           {room?.name ?? (
@@ -312,10 +303,18 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
             </span>
           )}
         </h1>
-        <p>
-          O <strong className="profile-section-name">Vou ver</strong> de cada pessoa entra na seleção da rodada.
-          Deslize, descubra os matches e combinem a sessão.
-        </p>
+        {!compactIntro && (
+          <p>
+            O <strong className="profile-section-name">Vou ver</strong> de cada pessoa entra na seleção da rodada.
+            Deslize, descubra os matches e combinem a sessão.
+          </p>
+        )}
+        {room && compactIntro && (
+          <div className="room-header-actions">
+            <RoomNavLink href="/salas">Minhas salas</RoomNavLink>
+            {room.isOwner ? deleteButton(room.id, room.name) : leaveButton(room.id, room.name, room.status)}
+          </div>
+        )}
       </div>
       {error && (
         <p role="alert" className="message error">
@@ -433,125 +432,221 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
       )}
       {id && !room && !join && !error && !ended && <p role="status">Carregando sala…</p>}
       {room && (
-        <>
-          <section className="panel room-people" aria-label="Participantes">
-            <div className="section-heading">
-              <h2>{room.members.length}/8 participantes</h2>
-              <div className="room-header-actions">
-                <RoomNavLink href="/salas">Minhas salas</RoomNavLink>
-                {room.isOwner ? deleteButton(room.id, room.name) : leaveButton(room.id, room.name, room.status)}
+        <div className={"room-stage room-stage-" + room.status}>
+          {room.status !== "lobby" && (
+            <section className="panel room-people" aria-label="Participantes">
+              <div className="section-heading">
+                <h2>{room.members.length}/8 participantes</h2>
+                {room.status !== "voting" && (
+                  <div className="room-header-actions">
+                    <RoomNavLink href="/salas">Minhas salas</RoomNavLink>
+                    {room.isOwner ? deleteButton(room.id, room.name) : leaveButton(room.id, room.name, room.status)}
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="room-members">
-              {room.members.map((m, index) => (
-                <a
-                  className="room-member-link"
-                  key={index}
-                  href={m.isSelf || !m.username ? undefined : "/?usuario=" + encodeURIComponent(m.username)}
-                  aria-label={m.isSelf ? "Seu perfil" : "Ver perfil de " + m.name}
-                >
-                  <ProfileAvatar name={m.name} avatar={m.avatar} />
-                  <span>
-                    {m.name}
-                    <small>{room.status === "lobby" ? "Na sala" : m.voted + "/" + room.titles.length + " votos"}</small>
-                  </span>
-                </a>
-              ))}
-            </div>
-          </section>
-          {room.status === "lobby" && (
-            <section className="panel room-lobby">
-              <h2>Reúna todo mundo</h2>
-              <RoomFriends key={room.id + room.members.length} roomId={room.id} full={room.members.length >= 8} />
-              <fieldset className="room-genre-filter">
-                <legend>Tipo de obra</legend>
-                <div className="room-genre-options">
-                  {Object.entries(mediaTypes).map(([value, label]) => (
-                    <button
-                      type="button"
-                      key={value}
-                      aria-pressed={room.type === value}
-                      disabled={busy || !room.isOwner}
-                      onClick={() => void action(() => api("/" + id + "/settings", "PUT", { type: value }))}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="room-genre-filter">
-                <legend>Qual é o clima da sessão?</legend>
-                <div className="room-genre-options">
-                  {Object.entries(genres).map(([value, label]) => (
-                    <button
-                      type="button"
-                      key={value}
-                      aria-pressed={
-                        Number(value) === 0 ? selectedGenres.length === 0 : selectedGenres.includes(Number(value))
-                      }
-                      disabled={busy || !room.isOwner}
-                      onClick={() =>
-                        void action(() =>
-                          api("/" + id + "/settings", "PUT", {
-                            genres:
-                              Number(value) === 0
-                                ? []
-                                : selectedGenres.includes(Number(value))
-                                  ? selectedGenres.filter((g) => g !== Number(value))
-                                  : [...selectedGenres, Number(value)],
-                          }),
-                        )
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <small>
-                  Obras de qualquer gênero selecionado, no <strong className="profile-section-name">Vou ver</strong> e
-                  nas sugestões.{" "}
-                  {room.isOwner ? "Escolha um ou mais antes de iniciar." : "O anfitrião escolhe os gêneros."}
-                </small>
-              </fieldset>
-              <p>
-                Começamos pelas obras do <strong className="profile-section-name">Vou ver</strong>. Se as listas
-                estiverem vazias, usamos sugestões do TMDB. Misturamos as listas sem repetir obras, em uma rodada de até
-                60 títulos. Depois do início, ninguém mais entra. Se a maioria quiser ver, quem passou poderá
-                reconsiderar vendo os nomes de quem quer ver.
-              </p>
-              <button onClick={() => void share()}>Convidar pessoas</button>
-              <label>
-                Link da sala
-                <input
-                  readOnly
-                  value={typeof window !== "undefined" ? location.origin + "/salas?sala=" + id : ""}
-                  onFocus={(e) => e.target.select()}
-                  onClick={(e) => void copyInvite(e.currentTarget)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void copyInvite(e.currentTarget);
-                    }
-                  }}
-                  aria-describedby="room-copy-status"
-                />
-              </label>
-              <p id="room-copy-status" className="room-copy-status" role="status">
-                {copyNotice || "Clique no link para copiar e compartilhar."}
-              </p>
-              {room.isOwner ? (
-                <button
-                  className="primary"
-                  disabled={busy || room.members.length < 2}
-                  onClick={() => void action(() => api("/" + id + "/start", "POST"))}
-                >
-                  {busy ? "Preparando as obras…" : "Todos chegaram · iniciar rodada"}
-                </button>
-              ) : (
-                <p>Aguardando o anfitrião iniciar.</p>
-              )}
-              <p className="muted">O convite da sala não substitui o convite de cadastro da alpha.</p>
+              <div className="room-members">
+                {room.members.map((m, index) => (
+                  <a
+                    className="room-member-link"
+                    key={index}
+                    href={m.isSelf || !m.username ? undefined : "/?usuario=" + encodeURIComponent(m.username)}
+                    aria-label={m.isSelf ? "Seu perfil" : "Ver perfil de " + m.name}
+                  >
+                    <ProfileAvatar name={m.name} avatar={m.avatar} />
+                    <span>
+                      {m.name}
+                      <small>
+                        {room.status === "lobby" ? "Na sala" : "votou " + m.voted + " de " + room.titles.length}
+                      </small>
+                    </span>
+                  </a>
+                ))}
+              </div>
             </section>
+          )}
+          {room.status === "lobby" && (
+            <div className="room-lobby-layout">
+              <section className="panel room-lobby-people" aria-labelledby="room-people-heading">
+                <header className="room-lobby-heading">
+                  <h2 id="room-people-heading">Quem vem</h2>
+                  <span className="room-lobby-count">{room.members.length}/8 na sala</span>
+                </header>
+                <div className="room-members">
+                  {room.members.map((m, index) => (
+                    <a
+                      className="room-member-link"
+                      key={index}
+                      href={m.isSelf || !m.username ? undefined : "/?usuario=" + encodeURIComponent(m.username)}
+                      aria-label={m.isSelf ? "Seu perfil" : "Ver perfil de " + m.name}
+                    >
+                      <ProfileAvatar name={m.name} avatar={m.avatar} />
+                      <span>
+                        {m.name}
+                        <small>{m.isSelf ? "Você" : "Na sala"}</small>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+                <RoomFriends key={room.id + room.members.length} roomId={room.id} full={room.members.length >= 8} />
+                <div className="room-lobby-link">
+                  <label htmlFor="room-link">Link da sala</label>
+                  <div className="room-lobby-link-row">
+                    <input
+                      id="room-link"
+                      readOnly
+                      value={typeof window !== "undefined" ? location.origin + "/salas?sala=" + id : ""}
+                      onFocus={(e) => e.target.select()}
+                      onClick={(e) => void copyInvite(e.currentTarget)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void copyInvite(e.currentTarget);
+                        }
+                      }}
+                      aria-describedby="room-copy-status"
+                    />
+                    <button type="button" onClick={() => void share()}>
+                      Convidar
+                    </button>
+                  </div>
+                  <small id="room-copy-status" className="room-copy-status" role="status">
+                    {copyNotice ||
+                      "Clique no link para copiar. O convite da sala não substitui o convite de cadastro da alpha."}
+                  </small>
+                </div>
+              </section>
+              <section className="panel room-lobby room-lobby-settings" aria-labelledby="room-settings-heading">
+                <header className="room-lobby-heading">
+                  <h2 id="room-settings-heading">Como vai ser a rodada</h2>
+                  {!room.isOwner && <span className="room-lobby-count">O anfitrião escolhe</span>}
+                </header>
+                <div className="room-lobby-pair">
+                  <fieldset className="room-genre-filter">
+                    <legend>Tipo de obra</legend>
+                    <div className="room-genre-options">
+                      {Object.entries(mediaTypes).map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          aria-pressed={room.type === value}
+                          disabled={busy || !room.isOwner}
+                          onClick={() => void action(() => api("/" + id + "/settings", "PUT", { type: value }))}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset className="room-genre-filter">
+                    <legend>Onde vamos assistir?</legend>
+                    <div className="room-genre-options">
+                      {(
+                        [
+                          [
+                            false,
+                            "Qualquer lugar",
+                            "Entram todas as obras do Vou ver de cada um, onde quer que passem.",
+                          ],
+                          [
+                            true,
+                            "Só o que a gente assina",
+                            "Entram só obras incluídas na assinatura ou grátis em algum streaming que alguém da sala marcou em Configurações → Meus streamings. Aluguel e compra não contam.",
+                          ],
+                        ] as const
+                      ).map(([value, label, hint]) => (
+                        <button
+                          type="button"
+                          key={String(value)}
+                          title={hint}
+                          aria-pressed={!!room.subscribedOnly === value}
+                          disabled={!room.isOwner}
+                          aria-disabled={busy || undefined}
+                          onClick={() => {
+                            if (!busy) void action(() => api("/" + id + "/settings", "PUT", { subscribedOnly: value }));
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {room.subscribedOnly && !room.providerCount ? (
+                      <small className="room-filter-warning">
+                        Ninguém da sala marcou os streamings que assina. Marquem em{" "}
+                        <Link href="/conta/configuracoes#streamings">Configurações</Link>, senão a rodada não começa.
+                      </small>
+                    ) : (
+                      <small>
+                        {room.subscribedOnly ? (
+                          <>
+                            Só obras incluídas (assinatura ou grátis){" "}
+                            {room.providerCount === 1 ? "no 1 streaming" : "nos " + room.providerCount + " streamings"}{" "}
+                            que a turma marcou em <Link href="/conta/configuracoes#streamings">Configurações</Link>.
+                          </>
+                        ) : room.isOwner ? (
+                          "Entra qualquer obra. Ative a segunda opção para ficar só com o que dá para ver nos streamings da turma."
+                        ) : (
+                          "Entra qualquer obra. O anfitrião pode limitar aos streamings da turma."
+                        )}
+                      </small>
+                    )}
+                  </fieldset>
+                </div>
+                <fieldset className="room-genre-filter">
+                  <legend>Qual é o clima da sessão?</legend>
+                  <div className="room-genre-options">
+                    {Object.entries(genres).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        aria-pressed={
+                          Number(value) === 0 ? selectedGenres.length === 0 : selectedGenres.includes(Number(value))
+                        }
+                        disabled={busy || !room.isOwner}
+                        onClick={() =>
+                          void action(() =>
+                            api("/" + id + "/settings", "PUT", {
+                              genres:
+                                Number(value) === 0
+                                  ? []
+                                  : selectedGenres.includes(Number(value))
+                                    ? selectedGenres.filter((g) => g !== Number(value))
+                                    : [...selectedGenres, Number(value)],
+                            }),
+                          )
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <small>
+                    Vale para o <strong className="profile-section-name">Vou ver</strong> e as sugestões.{" "}
+                    {room.isOwner ? "Escolha um ou mais." : "O anfitrião escolhe."}
+                  </small>
+                </fieldset>
+                <footer className="room-lobby-start">
+                  <p>
+                    Entram as obras do <strong className="profile-section-name">Vou ver</strong> de cada um (ou
+                    sugestões do TMDB), até 60 títulos. Depois do início, ninguém mais entra.
+                  </p>
+                  {room.isOwner ? (
+                    <button
+                      className="primary"
+                      disabled={busy || room.members.length < 2}
+                      onClick={() => void action(() => api("/" + id + "/start", "POST"))}
+                    >
+                      {busy
+                        ? "Preparando as obras…"
+                        : room.members.length < 2
+                          ? "Chame pelo menos mais 1 pessoa"
+                          : "Todos chegaram · iniciar rodada"}
+                    </button>
+                  ) : (
+                    <p className="room-lobby-waiting">Aguardando o anfitrião iniciar.</p>
+                  )}
+                </footer>
+              </section>
+            </div>
           )}
           {room.status === "voting" && !!room.reconsiderations?.length && (
             <section className="panel room-reconsider" aria-label="Segunda rodada">
@@ -619,10 +714,17 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
               <section className="room-swipe-area">
                 <div className="room-progress">
                   <span>
-                    {selectedGenres.length ? selectedGenres.map((g) => genres[g]).join(" · ") : "Todos os gêneros"} ·
-                    Seu voto · {room.votes.length}/{room.titles.length}
+                    {selectedGenres.length ? selectedGenres.map((g) => genres[g]).join(" · ") : "Todos os gêneros"}
+                    {room.subscribedOnly ? " · Só o que a gente assina" : ""} ·{" "}
+                    <strong>
+                      Você votou em {room.votes.length} de {room.titles.length} obras
+                    </strong>
                   </span>
-                  <progress value={room.votes.length} max={room.titles.length} />
+                  <progress
+                    value={room.votes.length}
+                    max={room.titles.length}
+                    aria-label={"Você votou em " + room.votes.length + " de " + room.titles.length + " obras"}
+                  />
                 </div>
                 {film ? (
                   <>
@@ -670,6 +772,10 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
                         </span>
                       )}
                     </article>
+                    <header className="room-film-info">
+                      <span>{film.year}</span>
+                      <h2>{film.name}</h2>
+                    </header>
                     <p className="room-summary">{film.summary || "Sinopse indisponível."}</p>
                     <div className="room-vote-actions">
                       <button disabled={busy} className="room-pass" onClick={() => void vote(false)}>
@@ -778,7 +884,7 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
               <RoomNavLink href="/salas">Minhas salas</RoomNavLink>
             </section>
           )}
-        </>
+        </div>
       )}
     </main>
   );

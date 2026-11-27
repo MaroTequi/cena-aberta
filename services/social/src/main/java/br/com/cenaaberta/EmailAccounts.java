@@ -147,6 +147,48 @@ class EmailAccounts {
         return new Login((String)row.get("actor"),(Integer)row.get("session_version"),email);
     }
 
+    /**
+     * Pessoa que entrou pelo Google (o site só chama depois de o Google confirmar a identidade).
+     * @param subject identificador fixo da pessoa no Google ("sub")
+     * @param email e-mail da conta Google
+     * @param emailVerified se o Google confirmou que o e-mail é dela
+     */
+    record GoogleInput(String subject,String email,Boolean emailVerified) {}
+
+    /**
+     * Entrada pelo Google. Já ligada: entra na mesma conta. Sem ligação, mas com conta de mesmo e-mail: liga e entra
+     * (o e-mail precisa estar verificado pelo Google). Sem conta: cria uma, respeitando o modo só por convite.
+     * A conta criada assim não tem senha conhecida; para usar e-mail e senha, a pessoa define uma em "Esqueci a senha".
+     */
+    @PostMapping("/google") @Transactional
+    Login google(@RequestBody GoogleInput input) {
+        limit();
+        String subject=input.subject()==null?"":input.subject().strip();
+        if(subject.isEmpty()||subject.length()>255) throw error(HttpStatus.BAD_REQUEST,"Identidade do Google inválida.");
+        if(!Boolean.TRUE.equals(input.emailVerified())) throw error(HttpStatus.FORBIDDEN,"Confirme o e-mail na sua conta Google antes de entrar.");
+        String email=email(input.email());
+        var linked=db.queryForList("select a.actor,a.session_version,a.email from google_identity g join email_account a on a.actor=g.actor where g.subject=? and a.state<>'deleted'",subject);
+        if(!linked.isEmpty()) {
+            var row=linked.getFirst();
+            return new Login((String)row.get("actor"),(Integer)row.get("session_version"),(String)row.get("email"));
+        }
+        // Ligação antiga para uma conta excluída não vale mais: a pessoa começa de novo pelo e-mail.
+        db.update("delete from google_identity where subject=?",subject);
+        var existing=account(email);
+        if(existing.isEmpty()) {
+            if(!canRegister(email)) throw error(HttpStatus.FORBIDDEN,"O cadastro está aberto só para convidados.");
+            try { db.update("insert into email_account(actor,email,password_hash) values(?,?,?)","account_"+UUID.randomUUID().toString().replace("-",""),email,encoder.encode(unknownPassword())); }
+            catch(DuplicateKeyException concurrent) { /* outra entrada criou a conta ao mesmo tempo; usa a que existe */ }
+            existing=account(email);
+        }
+        var login=existing.orElseThrow(()->error(HttpStatus.CONFLICT,"Não foi possível preparar a conta. Tente novamente."));
+        var state=db.queryForList("select state from email_account where actor=?",String.class,login.id());
+        if(state.isEmpty()||"deleted".equals(state.getFirst())) throw error(HttpStatus.CONFLICT,"Conta indisponível.");
+        try { db.update("insert into google_identity(subject,actor) values(?,?)",subject,login.id()); }
+        catch(DuplicateKeyException other) { throw error(HttpStatus.CONFLICT,"Esta conta já está ligada a outro login do Google."); }
+        return login;
+    }
+
     @GetMapping("/session")
     void session(@RequestHeader("X-Actor") String actor,@RequestParam int version) {
         Integer count=db.queryForObject("select count(*) from email_account where actor=? and session_version=? and state<>'deleted'",Integer.class,actor,version);
@@ -188,6 +230,12 @@ class EmailAccounts {
     private Optional<Login> account(String email) {
         return db.query("select actor,session_version from email_account where email=?",
             (r,i)->new Login(r.getString("actor"),r.getInt("session_version"),email),email).stream().findFirst();
+    }
+
+    /** Senha aleatória que ninguém conhece (43 caracteres, dentro do limite de 72 bytes do BCrypt). */
+    private String unknownPassword() {
+        byte[] bytes=new byte[32]; random.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private boolean canRegister(String email) {
