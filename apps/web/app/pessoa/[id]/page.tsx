@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EditorialLinks } from "../../editorial-links";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
@@ -45,9 +46,9 @@ export default async function PersonPage({
     <>
       <header className="top">
         <div className="wrap nav">
-          <a className="logo" href="/">
+          <Link className="logo" href="/">
             <span className="mark">◈</span> cena<span>aberta</span>
-          </a>
+          </Link>
           <nav aria-label="Navegação principal">
             <EditorialLinks />
           </nav>

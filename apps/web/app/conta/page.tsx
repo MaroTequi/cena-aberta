@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { returnPath } from "../../lib/return-path";
 import { signIn } from "next-auth/react";
@@ -156,9 +157,9 @@ export default function Conta() {
   return (
     <main className="wrap account-page">
       <section className="panel account-panel" aria-labelledby="account-title">
-        <a className="account-brand" href="/">
+        <Link className="account-brand" href="/">
           <span aria-hidden="true">◈</span> Cena Aberta
-        </a>
+        </Link>
         <h1 id="account-title">{title}</h1>
         <p className="account-description">{description}</p>
         {error && (

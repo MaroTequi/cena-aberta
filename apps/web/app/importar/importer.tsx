@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef, useState } from "react";
 type Row = {
   kind: string;
@@ -240,12 +241,12 @@ export function LetterboxdImporter() {
   return (
     <main className="wrap import-page">
       <header className="room-header">
-        <a href="/" className="account-brand">
+        <Link href="/" className="account-brand">
           Cena Aberta
-        </a>
-        <a href="/?aba=profile" className="room-nav-button">
+        </Link>
+        <Link href="/?aba=profile" className="room-nav-button">
           Meu perfil
-        </a>
+        </Link>
       </header>
       <div className="import-hero">
         <span className="room-eyebrow">SEU HISTÓRICO, UM NOVO CAPÍTULO</span>
@@ -500,9 +501,9 @@ export function LetterboxdImporter() {
       {complete && (
         <section className="panel">
           <h2>Importação concluída</h2>
-          <a href="/?aba=profile" className="room-nav-button">
+          <Link href="/?aba=profile" className="room-nav-button">
             Ver meu perfil
-          </a>
+          </Link>
         </section>
       )}
     </main>

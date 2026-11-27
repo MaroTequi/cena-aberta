@@ -1,3 +1,4 @@
+import Link from "next/link";
 export default function Credits() {
   return (
     <main className="wrap">
@@ -46,7 +47,7 @@ export default function Credits() {
             <a href="https://game-icons.net/1x1/lorc/vintage-robot.html">Robô retrô</a> — Lorc
           </li>
         </ul>
-        <a href="/">Cena Aberta</a>
+        <Link href="/">Cena Aberta</Link>
       </section>
     </main>
   );

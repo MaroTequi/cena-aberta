@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { NotificationBell } from "../notification-bell";
 import { useEffect, useRef, useState } from "react";
 import { RoomFriends } from "./room-friends";
@@ -291,15 +292,15 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
   return (
     <main className="wrap rooms-page">
       <header className="room-header">
-        <a href="/" className="account-brand">
+        <Link href="/" className="account-brand">
           Cena Aberta
-        </a>
+        </Link>
         <div className="row">
           <NotificationBell />
-          <a className="room-nav-button room-profile-link" href="/?aba=profile">
+          <Link className="room-nav-button room-profile-link" href="/?aba=profile">
             <ProfileAvatar name={profile.name} avatar={profile.avatar} />
             Meu perfil
-          </a>
+          </Link>
         </div>
       </header>
       <div className="room-intro">

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import {
   subscribePreferences,
@@ -53,9 +54,9 @@ export function AccountSettings({ supported }: { supported: boolean }) {
   }
   return (
     <main className="wrap account-settings">
-      <a className="account-brand" href="/">
+      <Link className="account-brand" href="/">
         Cena Aberta
-      </a>
+      </Link>
       <section className="panel">
         <h1>Minha conta</h1>
         <section className="form">
@@ -198,9 +199,9 @@ export function AccountSettings({ supported }: { supported: boolean }) {
           </p>
         )}
         <nav className="account-settings-nav" aria-label="Navegação da conta">
-          <a className="room-nav-button" href="/?aba=profile">
+          <Link className="room-nav-button" href="/?aba=profile">
             <span aria-hidden="true">←</span> Voltar ao meu perfil
-          </a>
+          </Link>
           <button onClick={() => void signOut({ callbackUrl: "/conta" })}>Sair</button>
         </nav>
       </section>

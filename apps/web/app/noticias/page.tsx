@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EditorialLinks } from "../editorial-links";
 import { EditorialImage } from "../editorial-image";
 import type { Metadata } from "next";
@@ -16,9 +17,9 @@ export default async function News({ searchParams }: { searchParams: Promise<{ t
     <>
       <header className="top">
         <div className="wrap nav">
-          <a className="logo" href="/">
+          <Link className="logo" href="/">
             <span className="mark">◈</span> cena<span>aberta</span>
-          </a>
+          </Link>
           <nav aria-label="Navegação principal">
             <EditorialLinks onNewsPage />
           </nav>
