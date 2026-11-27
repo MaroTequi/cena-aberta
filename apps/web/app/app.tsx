@@ -20,10 +20,9 @@ import { UiIcon } from "./ui-icons";
 import { StarRating } from "./star-rating";
 import { ProfileFriends } from "./profile-friends";
 import { ProfileFriend } from "./profile-friend";
-import { ReviewReport } from "./review-report";
 import { ReviewEditor } from "./review-editor";
 import { Icon, IconAction } from "./action-icons";
-import { ProfileAvatar, ProfileForm, type Profile, type ProfileInput } from "./profile-form";
+import { ProfileAvatar, ProfileForm, type ProfileInput } from "./profile-form";
 import { LibraryPage } from "./library-page";
 import { ProfileLists } from "./profile-lists";
 import { ProfileCompatibility } from "./profile-compatibility";
@@ -33,83 +32,24 @@ import { TitleFriends } from "./title-social/title-friends";
 import { ReviewSocial } from "./title-social/review-social";
 import { MainHeader, categories } from "./main-header";
 
-type Entry = {
-  title: string;
-  watched: boolean;
-  interest: boolean;
-  rewatching: boolean;
-  rating: number | null;
-  review: string | null;
-  spoiler: boolean;
-  version: number;
-  hidden?: boolean;
-  evaluation_public?: boolean;
-  viewer_watched?: boolean;
-  my_vote?: boolean | null;
-};
-type Viewing = { id: string; title: string; watched_on: string | null; watched_at: string | null; rewatch: boolean };
-type PendingViewing = { title: string; name: string; watchedAt: string };
-const profileSections = ["watchlist", "ranking", "watched", "diary", "lists"] as const;
-type Section = (typeof profileSections)[number];
-type Dashboard = {
-  visibility?: Record<Section, boolean>;
-  ranking?: { title: string; tier: number }[];
-  needsProfile?: boolean;
-  profile?: Profile;
-  library?: Entry[];
-  diaryHasMore?: boolean;
-  viewings?: Viewing[];
-};
-type Review = {
-  username: string;
-  name: string;
-  avatar?: string;
-  rating: number | null;
-  review: string;
-  spoiler: boolean;
-  version: number;
-  my_vote: boolean | null;
-  likes?: number;
-  liked?: boolean;
-  comments?: number;
-};
-type RankedSeries = { title: string; tier: number; average: number };
-type SeasonProgress = { watched: number; total: number; average: number | null; rewatched: boolean; complete: boolean };
-type SeasonAverage = { season: number; average: number };
-type Community = {
-  seasons?: SeasonAverage[];
-  average: number | null;
-  rating_count: number;
-  episode_rating_count?: number;
-  reviews: Review[];
-};
-const demoEvaluations = [
-  { name: "Clara", rating: 9, review: "Gostei de como a fotografia muda com o clima da história.", spoiler: false },
-  { name: "Rafael", rating: 6, review: "A atmosfera me ganhou, mas achei o começo lento.", spoiler: false },
-  {
-    name: "Bia",
-    rating: 10,
-    review: "A escolha da personagem na cena final mudou minha leitura da história. Este comentário é fictício.",
-    spoiler: true,
-  },
-  { name: "Diego", rating: 7, review: null, spoiler: false },
-];
-const demoSum = demoEvaluations.reduce((sum, item) => sum + item.rating, 0);
-const demoEpisodeRatings = [
-  { viewer: "Clara", episode: 1, rating: 9 },
-  { viewer: "Clara", episode: 2, rating: 8 },
-  { viewer: "Rafael", episode: 1, rating: 6 },
-  { viewer: "Bia", episode: 2, rating: 10 },
-  { viewer: "Diego", episode: 3, rating: 7 },
-];
-const labels: Record<string, string> = {
-  "demo-ultimo-rolo": "O Último Rolo",
-  "demo-mare-alta": "Maré Alta",
-  "demo-lua-de-papel": "Lua de Papel",
-  "demo-neon-norte": "Neon Norte",
-  "demo-fim-da-linha": "Fim da Linha",
-  "demo-arquipelago": "Arquipélago",
-};
+import { api } from "../lib/client-api";
+import type {
+  Community,
+  Dashboard,
+  Entry,
+  PendingViewing,
+  RankedSeries,
+  SeasonProgress,
+  Section,
+  Viewing,
+} from "../lib/dashboard-types";
+import { profileSections } from "../lib/dashboard-types";
+import { demoEpisodeRatings, demoEvaluations, demoSum, demoTitleNames } from "../lib/demo-community";
+import { displayRating, sessionDate, sessionTime } from "../lib/display-format";
+import { DiaryDialog } from "./diary-dialog";
+import { ReviewReader } from "./review-reader";
+import { CreditsPanel } from "./credits-panel";
+
 const empty: Entry = {
   title: "",
   watched: false,
@@ -120,259 +60,6 @@ const empty: Entry = {
   spoiler: false,
   version: 0,
 };
-const displayRating = (rating: number) => (rating / 2).toLocaleString("pt-BR");
-const sessionDate = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: "America/Sao_Paulo",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-const sessionTime = new Intl.DateTimeFormat("pt-BR", {
-  timeZone: "America/Sao_Paulo",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-async function api<T>(path: string, method = "GET", body?: unknown, key?: string): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (key) headers["Idempotency-Key"] = key;
-  const response = await fetch("/api/v1/" + path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const data = await response.text();
-  const json = data ? JSON.parse(data) : null;
-  if (!response.ok) throw new Error(json?.message || "Não foi possível concluir a ação.");
-  return json;
-}
-type DiaryResult = { items: Viewing[]; hasMore: boolean };
-
-function DiaryDialog({
-  dashboard,
-  username,
-  title,
-  name,
-  onClose,
-  renderSession,
-  visibility,
-  message,
-}: {
-  dashboard: Dashboard;
-  username?: string;
-  title: string;
-  name: string;
-  onClose: () => void;
-  renderSession: (item: Viewing) => ReactNode;
-  visibility: ReactNode;
-  message: string;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current;
-    element?.showModal();
-    return () => element?.close();
-  }, []);
-  const [page, setPage] = useState(1);
-  const [attempt, retry] = useState(0);
-  const [result, setResult] = useState<{ dashboard: Dashboard; page: number; data: DiaryResult } | null>(null);
-  const [failure, setFailure] = useState("");
-  useEffect(() => {
-    let active = true;
-    setFailure("");
-    const params = new URLSearchParams({ page: String(page), title });
-    if (username) params.set("username", username);
-    (async () => {
-      const data = await api<DiaryResult>("diary?" + params);
-      if (!active) return;
-      if (!data.items.length && page > 1) {
-        setPage(page - 1);
-        return;
-      }
-      setResult({ dashboard, page, data });
-    })().catch((error) => {
-      if (active) setFailure(error.message);
-    });
-    return () => {
-      active = false;
-    };
-  }, [dashboard, page, username, title, attempt]);
-  const data = result?.page === page && result.dashboard === dashboard ? result.data : null;
-  function navigate(next: number) {
-    setFailure("");
-    setPage(next);
-  }
-  return (
-    <dialog
-      ref={dialog}
-      className="session-dialog diary-dialog"
-      aria-labelledby="diary-heading"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <header>
-        <h2 id="diary-heading">Diário · {name}</h2>
-        <div className="diary-toolbar">
-          {visibility && <span className="diary-visibility">Visibilidade do Diário {visibility}</span>}
-          <button autoFocus onClick={onClose}>
-            Fechar
-          </button>
-        </div>
-      </header>
-      {message && <p role="status">{message}</p>}
-      {data ? (
-        <>
-          <ul className="diary-sessions">{data.items.map(renderSession)}</ul>
-          {!data.items.length && <p className="muted">Nenhuma sessão registrada.</p>}
-        </>
-      ) : failure ? (
-        <div role="alert">
-          {failure}{" "}
-          <button
-            onClick={() => {
-              setFailure("");
-              retry((n) => n + 1);
-            }}
-          >
-            Tentar novamente
-          </button>
-        </div>
-      ) : (
-        <p role="status">Carregando sessões…</p>
-      )}
-      {(page > 1 || data?.hasMore) && (
-        <nav className="row diary-pagination" aria-label="Páginas do Diário">
-          <button disabled={page === 1} onClick={() => navigate(page - 1)}>
-            Anterior
-          </button>
-          <span aria-live="polite">Página {page}</span>
-          <button disabled={!data?.hasMore} onClick={() => navigate(page + 1)}>
-            Próxima
-          </button>
-        </nav>
-      )}
-    </dialog>
-  );
-}
-
-type SpoilerState = { spoiler: boolean; my_vote?: boolean | null };
-function ReviewReader({
-  name,
-  titleId,
-  author,
-  own,
-  watched,
-  text,
-  version,
-  initial,
-}: {
-  name?: string;
-  titleId: string;
-  author: string;
-  own: boolean;
-  watched: boolean;
-  text: string;
-  version: number;
-  initial: SpoilerState;
-}) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const [reading, setReading] = useState(false);
-  const [state, setState] = useState(initial);
-  const [saving, setSaving] = useState(false),
-    [error, setError] = useState("");
-  async function vote(value: boolean) {
-    if (saving || state.my_vote === value) return;
-    setSaving(true);
-    setError("");
-    try {
-      setState(
-        await api<SpoilerState>("titles/" + titleId + "/spoiler-vote", "PUT", {
-          username: author,
-          version,
-          containsSpoiler: value,
-        }),
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-  const review = <Spoiler hidden={!own && !watched && state.spoiler}>{text}</Spoiler>;
-  const votes = (
-    <>
-      {!own && (
-        <div className="spoiler-votes" role="group" aria-label="Votar sobre spoiler na resenha">
-          {[true, false].map((value) => {
-            const label = value ? "Contém spoiler" : "Não contém spoiler";
-            return (
-              <IconAction
-                key={String(value)}
-                kind="spoiler"
-                iconActive={value}
-                active={state.my_vote === value}
-                label={label}
-                disabled={saving}
-                onClick={() => void vote(value)}
-              />
-            );
-          })}
-        </div>
-      )}
-      {error && (
-        <p className="message error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
-  );
-  const report = !own && <ReviewReport title={titleId} username={author} version={version} />;
-  if (!name)
-    return (
-      <>
-        {votes}
-        {review}
-        {report}
-      </>
-    );
-  return (
-    <>
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        aria-label={"Abrir resenha de " + name}
-        title="Abrir resenha"
-        onClick={() => {
-          setReading(true);
-          dialog.current?.showModal();
-        }}
-      >
-        <UiIcon name="review" />
-      </button>
-      <dialog
-        ref={dialog}
-        className="session-dialog profile-review-dialog"
-        aria-label={"Resenha de " + name}
-        onClose={() => setReading(false)}
-      >
-        <h2>Resenha de {name}</h2>
-        {reading && (
-          <>
-            {review}
-            {votes}
-            {report}
-          </>
-        )}
-        <form method="dialog" className="row">
-          <button>Fechar</button>
-        </form>
-      </dialog>
-    </>
-  );
-}
 export function App({
   chronology,
   monthlyReviews,
@@ -443,7 +130,7 @@ export function App({
     if (pendingViewing && !dialog?.open) dialog?.showModal();
     if (!pendingViewing && dialog?.open) dialog.close();
   }, [pendingViewing]);
-  const label = (id: string) => known[id]?.name ?? labels[id] ?? "Obra do catálogo";
+  const label = (id: string) => known[id]?.name ?? demoTitleNames[id] ?? "Obra do catálogo";
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : "Falha inesperada.");
   const rankingTab = tab === "ranking";
   const refresh = useCallback(async () => {
@@ -1660,29 +1347,7 @@ export function App({
             </>
           )}
         </dialog>
-        {credits && (
-          <section className="panel">
-            <h2>Sobre o alpha</h2>
-            <p>
-              Cena Aberta é um diário audiovisual em desenvolvimento. O catálogo de demonstração usa obras fictícias.
-            </p>
-            <p>
-              <a href="https://www.themoviedb.org/">
-                <img
-                  src="https://www.themoviedb.org/assets/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg"
-                  width={88}
-                  alt="The Movie Database"
-                />
-              </a>
-            </p>
-            <p>This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
-            <p>
-              A visibilidade das seções é definida por você no perfil. Novas notas e resenhas são públicas por padrão.
-              Você pode tornar cada avaliação privada pelo controle de visibilidade. Somente as seções habilitadas ficam
-              visíveis para quem visita seu perfil.
-            </p>
-          </section>
-        )}
+        {credits && <CreditsPanel />}
       </main>
       <footer className="wrap footer">
         <span>Cena Aberta · Alpha</span>
