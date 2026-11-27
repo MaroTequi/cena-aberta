@@ -2,7 +2,7 @@
 
 > **Só para ambiente local.** As senhas abaixo são públicas (estão neste arquivo, que vai para o Git). Nunca aplique isto em produção nem em banco compartilhado.
 
-Pense numa vitrine de loja de teste: a gente enche as prateleiras com produtos de mentira para ver como a loja fica com gente de verdade circulando. Aqui são 5 pessoas fictícias com amizades, notas, resenhas, diário, coleções, metas e recomendações, para você abrir o app e já ver as 10 funcionalidades novas funcionando sem ter que cadastrar tudo na mão.
+Pense numa vitrine de loja de teste: a gente enche as prateleiras com produtos de mentira para ver como a loja fica com gente de verdade circulando. Aqui são 5 pessoas fictícias com amizades, notas, resenhas, diário, coleções, metas e recomendações, para você abrir o app e já ver as funcionalidades funcionando (inclusive "Onde assistir" e o filtro de streamings da sala) sem ter que cadastrar tudo na mão.
 
 ## Arquivos
 
@@ -16,9 +16,9 @@ A massa é **idempotente**: dá para aplicar quantas vezes quiser. Ela apaga só
 
 ## Como aplicar
 
-### 1. Garanta que a V32 já rodou
+### 1. Garanta que a V33 já rodou
 
-A V32 é a migração (script que altera o schema do banco) que cria as tabelas novas: metas, curtidas, comentários e recomendações. Ela roda sozinha quando o serviço social sobe. Então, **se o banco ainda é antigo, suba o app uma vez** (`node scripts/local.mjs`, da raiz), espere subir e pare (Ctrl+C). Se esquecer, o `seed.sql` falha dizendo que a tabela `annual_goal` (ou outra) não existe.
+A V33 é a migração (script que altera o schema do banco) mais recente que a massa usa: ela cria a tabela dos streamings que cada pessoa assina (`actor_provider`) e o filtro da sala. A V32 cria metas, curtidas, comentários e recomendações. Ela roda sozinha quando o serviço social sobe. Então, **se o banco ainda é antigo, suba o app uma vez** (`node scripts/local.mjs`, da raiz), espere subir e pare (Ctrl+C). Se esquecer, o `seed.sql` falha dizendo que a tabela `actor_provider` (ou outra) não existe.
 
 ### 2. H2 local (o caminho normal)
 
@@ -39,7 +39,7 @@ Depois é só subir o app (`node scripts/local.mjs`) e logar.
 
 ### 3. PostgreSQL do Docker Compose
 
-Com o `compose.yaml` no ar (serviço `social-db`, banco `social`, usuário `social`) e a V32 já aplicada pelo serviço social:
+Com o `compose.yaml` no ar (serviço `social-db`, banco `social`, usuário `social`) e a V33 já aplicada pelo serviço social:
 
 ```bash
 docker compose exec -T social-db psql -U social -d social -v ON_ERROR_STOP=1 < docs/dados-mock/seed.sql
@@ -50,7 +50,8 @@ Se você expõe a porta do Postgres, também serve `psql "postgresql://social:SE
 ### Detalhes que vale saber
 
 - **Datas recentes são relativas a "agora"** (`CURRENT_TIMESTAMP - INTERVAL ...`). Assim o feed (que só mostra coisas dos últimos 60 dias para diário) fica sempre cheio quando você reaplica. Já as sessões "do ano" são fixas em 2026 e 2025; se você usar a massa em 2027, a retrospectiva de 2026 continua lá, só o "ano atual" muda.
-- **Obras:** são IDs reais do TMDB (`tmdb-movie-N`, `tmdb-tv-N`) e algumas `demo-*`. Na primeira vez que alguém abre uma obra, o catálogo busca no TMDB (precisa do `TMDB_TOKEN` no `.env`) e guarda em cache. Sem token, as telas de obras `tmdb-*` que ainda não estão no cache falham.
+- **Obras:** são IDs reais do TMDB (`tmdb-movie-N`, `tmdb-tv-N`) e algumas `demo-*`. Na primeira vez que alguém abre uma obra, o catálogo busca no TMDB (precisa do `TMDB_TOKEN` no `.env`) e guarda em cache. Sem token, as telas de obras `tmdb-*` que ainda não estão no cache falham. Por isso, para ver a massa inteira, rode **com** o `TMDB_TOKEN`.
+- **Streamings:** cada pessoa da massa assina serviços com ids **reais** do TMDB (Netflix 8, Prime Video 119, Globoplay 307, Disney+ 337, Crunchyroll 283, HBO Max 1899) **e** um dos 3 fictícios do modo demo (9001 Tela Livre, 9002 Cine Casa, 9003 Maratona+). Assim "Você assina" aparece com ou sem `TMDB_TOKEN`; a tela de Configurações só mostra os que existem no modo em que o app está.
 - **Senhas:** hash BCrypt força 12, o mesmo encoder do `EmailAccounts`. O login é por **e-mail + senha**.
 
 ## Logins
@@ -66,6 +67,10 @@ Se você expõe a porta do Postgres, também serve `psql "postgresql://social:SE
 Todos os e-mails são do domínio fictício `@cenaaberta.test` e todas as senhas atendem a regra do cadastro (12+ caracteres, maiúscula, minúscula, número e símbolo).
 
 ## O que tem na massa, por usuário
+
+**Streamings:** Ana assina Netflix, Prime Video, Globoplay e Cine Casa (demo); Bruno, Disney+, Crunchyroll e Maratona+ (demo); Carla, HBO Max e Tela Livre (demo); Marina, Netflix e Tela Livre (demo); Diego, nenhum (mostra o convite para marcar).
+
+**Sala de votação:** "Sexta de filme", no saguão, com a Ana de dona, Bruno e Carla dentro, a Marina convidada (aparece no sino dela) e o filtro **"Só o que a gente assina"** ligado.
 
 **Amizades:** Ana é amiga de Bruno, Carla e Marina. Bruno e Carla também são amigos. Diego mandou pedido para a Ana e está **pendente** (aparece no sino dela).
 
@@ -114,14 +119,16 @@ Todos os e-mails são do domínio fictício `@cenaaberta.test` e todas as senhas
 3. **Meta anual** (**Ana**): barra com 18 de 40 em 2026. Edite a meta. Com **Diego**, ajuste a meta de 5.
 4. **Exportar dados** (**Ana**, em `/conta/configuracoes`): baixa um `.zip` com 5 planilhas (biblioteca, diário, ranking, coleções, episódios).
 5. **Filtros e ordenação da biblioteca** (**Ana**, em Vistos): ordene por nota, recentes, nome, ano; filtre por filme, série, anime, "sem nota", "nota 8 ou mais". Como **Bruno** olhando a Ana, `recentes` ainda funciona (ela abriu o diário); olhando a Carla, a aba de vistos vem vazia (privada).
-6. **Feed de amigos** (**Ana** ou **Carla** em `/feed`): lista mista de "assistiu", "avaliou" e "resenhou", com mais de 20 itens (clique em "carregar mais"). Note que o diário da Carla não aparece (diário fechado) e que a sessão do Bruno de 90 dias atrás não entra.
+6. **Mural dos amigos** (**Ana** ou **Carla** em `/feed`): lista mista de "assistiu", "avaliou" e "resenhou", com mais de 20 itens (clique em "carregar mais"). Note que o diário da Carla não aparece (diário fechado) e que a sessão do Bruno de 90 dias atrás não entra.
 7. **Compatibilidade** (**Ana** em `/amigos`, entrando no Bruno): 8 obras em comum, concordância e as listas "concordam" / "discordam". Com a Carla: 2 em comum, sem porcentagem. Com o Diego: bloqueado (só amigos).
 8. **Amigos que viram** (**Ana**, abrindo Matrix, Cidade de Deus ou Interestelar): veja quem assistiu, quem quer ver e as notas/resenhas visíveis. A Carla aparece só com a nota pública.
 9. **Curtir e comentar resenhas** (**Bruno** abrindo Matrix): a resenha da Ana tem 3 curtidas e 3 comentários. Curta, comente, apague um comentário seu. Tente curtir a própria resenha (deve recusar). A resenha de Attack on Titan aparece escondida como spoiler.
 10. **Recomendar a um amigo** (**Ana**, em qualquer obra): recomende a obra para o Bruno ou a Carla (o Diego não deve aparecer, não é amigo). Repita a mesma e veja que não duplica nem toca o sino de novo. Depois entre com **Bruno** e veja no sino.
 11. **Sino** (**Ana**): 3 recomendações novas + o pedido do Diego. Abra uma e ela sai do sino. Aceite o pedido do Diego e veja ele virar amigo.
 12. **Visibilidade do perfil** (**Carla**, em `/conta/perfil`): a opção de **listas** agora existe. Ligue e desligue e confira com a Ana vendo o perfil da Carla. (A Carla está fechada em tudo de propósito.)
-13. **Admin** (**Marina**, `/admin/feedback`): veja os 2 relatos; mude o status; com a Ana a rota deve negar.
+13. **Onde assistir** (**Ana**, abrindo Cidade de Deus ou Interestelar; Matrix só está na HBO Max, que ela não assina): veja os serviços separados em assinatura, grátis, aluguel e compra, com o selo "Você assina". Em `/conta/configuracoes`, seção "Meus streamings", marque e desmarque. Com o **Diego**, a obra mostra o convite para marcar os streamings.
+14. **Sala com filtro** (**Ana**, em `/salas` → "Sexta de filme"): o filtro "Só o que a gente assina" vem ligado, com a contagem de serviços da sala. Comece a votação e veja que só entram obras desses serviços. Com a **Marina**, aceite o convite pelo sino.
+15. **Admin** (**Marina**, `/admin/feedback`): veja os 2 relatos; mude o status; com a Ana a rota deve negar.
 
 ## Reaplicar ou limpar
 

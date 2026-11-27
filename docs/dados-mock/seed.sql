@@ -1,6 +1,6 @@
 -- MASSA DE DADOS DE TESTE VISUAL do Cena Aberta. SÓ PARA AMBIENTE LOCAL (senhas públicas, veja README.md).
 -- Compatível com H2 (MODE=PostgreSQL) e PostgreSQL 16. Idempotente: apaga só as linhas dos 5 actors da massa e reinsere.
--- Pré-requisito: o app já subiu uma vez (V32 aplicada). Datas recentes são relativas a CURRENT_TIMESTAMP.
+-- Pré-requisito: o app já subiu uma vez (V33 aplicada). Datas recentes são relativas a CURRENT_TIMESTAMP.
 
 -- 1) Limpeza (só os actors da massa, filhos antes dos pais)
 DELETE FROM review_comment WHERE author IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego') OR commenter IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
@@ -24,6 +24,7 @@ DELETE FROM movie_room WHERE owner IN ('account_mock00000000000000000000admin', 
 DELETE FROM movie_room_member WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
 DELETE FROM request_receipt WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
 DELETE FROM letterboxd_receipt WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
+DELETE FROM actor_provider WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
 DELETE FROM app_admin WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
 DELETE FROM email_link WHERE reset_actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego') OR email IN (SELECT email FROM email_account WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego'));
 DELETE FROM email_account WHERE actor IN ('account_mock00000000000000000000admin', 'account_mock0000000000000000000000ana1', 'account_mock000000000000000000000bruno', 'account_mock000000000000000000000carla', 'account_mock000000000000000000000diego');
@@ -293,3 +294,28 @@ INSERT INTO recommendation(id,sender,recipient,title,title_name,message,created,
 -- 12) Feedbacks para o painel de administração
 INSERT INTO feedback(id,actor,kind,description,page,app_version,status,created,updated) VALUES('79bc2a34-eb7a-570d-b33c-7a6614fb11ca','account_mock0000000000000000000000ana1','bug','O botão de curtir demora a responder na página de uma resenha.','/titulo/tmdb-movie-603','0.1.0-alpha','new',CURRENT_TIMESTAMP - INTERVAL '30' HOUR,CURRENT_TIMESTAMP - INTERVAL '30' HOUR);
 INSERT INTO feedback(id,actor,kind,description,page,app_version,status,created,updated) VALUES('66601fdc-2963-5755-801a-138f83c5c4a6','account_mock000000000000000000000bruno','suggestion','Seria legal filtrar o feed só por resenhas.','/amigos','0.1.0-alpha','reviewing',CURRENT_TIMESTAMP - INTERVAL '80' HOUR,CURRENT_TIMESTAMP - INTERVAL '80' HOUR);
+
+-- 13) Streamings que cada um assina (Onde assistir). 9001-9003 são os serviços fictícios do modo demo;
+--     8 Netflix, 119 Prime Video, 307 Globoplay, 337 Disney+, 283 Crunchyroll, 1899 Max são ids reais do TMDB no Brasil.
+--     Diego fica sem nenhum, para mostrar o convite para marcar em Configurações.
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock0000000000000000000000ana1',9002);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock0000000000000000000000ana1',8);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock0000000000000000000000ana1',119);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock0000000000000000000000ana1',307);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock000000000000000000000bruno',9003);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock000000000000000000000bruno',337);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock000000000000000000000bruno',283);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock000000000000000000000carla',9001);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock000000000000000000000carla',1899);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock00000000000000000000admin',9001);
+INSERT INTO actor_provider(actor,provider) VALUES('account_mock00000000000000000000admin',8);
+
+-- 14) Sala de votação no saguão: Ana é a dona, Bruno e Carla já entraram, Marina foi convidada.
+--     O filtro "Só o que a gente assina" vem ligado, para testar Onde assistir na sala.
+INSERT INTO movie_room(id,owner,name,status,created,expires,media_type,subscribed_only) VALUES('6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f','account_mock0000000000000000000000ana1','Sexta de filme','lobby',CURRENT_TIMESTAMP - INTERVAL '2' HOUR,CURRENT_TIMESTAMP + INTERVAL '144' HOUR,'all',true);
+INSERT INTO movie_room_member(room,actor,joined) VALUES('6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f','account_mock0000000000000000000000ana1',CURRENT_TIMESTAMP - INTERVAL '1' HOUR);
+INSERT INTO movie_room_member(room,actor,joined) VALUES('6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f','account_mock000000000000000000000bruno',CURRENT_TIMESTAMP - INTERVAL '1' HOUR);
+INSERT INTO movie_room_member(room,actor,joined) VALUES('6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f','account_mock000000000000000000000carla',CURRENT_TIMESTAMP - INTERVAL '1' HOUR);
+-- Aviso de fim da sala para cada membro, como o app grava ao entrar.
+INSERT INTO room_end_notice(room,recipient,name,reason,visible_at) SELECT r.id,m.actor,r.name,'expired',r.expires FROM movie_room r JOIN movie_room_member m ON m.room=r.id WHERE r.id='6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f';
+INSERT INTO movie_room_invitation(room,recipient,sender,created) VALUES('6b1f0c3e-8d2a-5c4b-9e7f-0a1b2c3d4e5f','account_mock00000000000000000000admin','account_mock0000000000000000000000ana1',CURRENT_TIMESTAMP - INTERVAL '1' HOUR);
