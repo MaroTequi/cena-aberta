@@ -271,3 +271,39 @@
     display: none;
   }
 }
+
+/* Entrar com Google */
+.account-google {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.account-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.account-divider::before,
+.account-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+.account-google-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #dadce0;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f1f1f;
+  font-weight: 600;
+}
+.account-google-button:hover:not(:disabled) {
+  background: #f2f2f2;
+}

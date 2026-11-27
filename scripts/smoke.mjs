@@ -443,6 +443,12 @@ try {
   assert.ok(account,"Sessão após confirmação não criada.");
   assert.equal(await emailSignIn({purpose:"register",token,password}),undefined);
   const accountHeaders={Cookie:account,Origin:web,"Content-Type":"application/json"};
+  // Login com o Google: com INVITE_ONLY, e-mail sem convite não cria conta; o e-mail que já tem conta é ligado a ela.
+  await request(social,"/accounts/google",{method:"POST",body:{subject:"smoke-google-x",email:"sem.convite@example.test",emailVerified:true},expected:403});
+  await request(social,"/accounts/google",{method:"POST",body:{subject:"smoke-google-y",email,emailVerified:false},expected:403});
+  const googleAccount=await request(social,"/accounts/google",{method:"POST",body:{subject:"smoke-google-sub",email,emailVerified:true}});
+  assert.equal(googleAccount.email,email,"liga à conta por e-mail que já existe");
+  assert.equal((await request(social,"/accounts/google",{method:"POST",body:{subject:"smoke-google-sub",email:"outro@example.test",emailVerified:true}})).id,googleAccount.id,"o login do Google continua na mesma conta");
   for(const path of ["/","/ranking","/obra/demo-lua-de-papel"]) {
     const gated=await fetch(web+path,{headers:accountHeaders,redirect:"manual"});
     assert.equal(gated.status,307);

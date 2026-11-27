@@ -30,6 +30,7 @@ const INTERNAL_ONLY = new Map([
   ["social POST /accounts/{purpose:register|reset}/confirm", "apps/web/lib/auth.ts (authorize do NextAuth) via lib/accounts.ts"],
   ["social POST /accounts/login", "apps/web/lib/auth.ts (authorize do NextAuth) via lib/accounts.ts"],
   ["social GET /accounts/session", "apps/web/lib/auth.ts (callback session do NextAuth) via lib/accounts.ts"],
+  ["social POST /accounts/google", "apps/web/lib/auth.ts (callback signIn do NextAuth, login com o Google) via lib/accounts.ts"],
   ["social GET /accounts/management", "apps/web/app/api/accounts/management/route.ts via lib/accounts.ts"],
   ["social POST /accounts/management", "apps/web/app/api/accounts/management/route.ts via lib/accounts.ts"],
   ["social POST /imports/letterboxd/preview", "apps/web/app/api/importar/letterboxd/[action]/route.ts (direto no social)"],
