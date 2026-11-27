@@ -24,7 +24,7 @@ public class Export {
     Export(JdbcTemplate db,ActiveActors actors) { this.db=db; this.actors=actors; }
 
     /**
-     * Gera o ZIP com biblioteca, diário, ranking, coleções e notas de episódios.
+     * Gera o ZIP com biblioteca, diário, ranking, coleções, notas de episódios e streamings assinados.
      * @param actor usuário da sessão
      * @return application/zip com Content-Disposition attachment
      * @throws IOException se a escrita em memória falhar
@@ -50,6 +50,9 @@ public class Export {
             csv(zip,"episodios.csv",List.of("obra","temporada","episodio","nota"),
                 db.queryForList("select title,season,episode,rating from episode_rating where actor=? order by title,season,episode",actor),
                 List.of("title","season","episode","rating"));
+            csv(zip,"streamings.csv",List.of("servico_tmdb"),
+                db.queryForList("select provider from actor_provider where actor=? order by provider",actor),
+                List.of("provider"));
         }
         String file="cena-aberta-"+LocalDate.now(DIARY_ZONE)+".zip";
         return ResponseEntity.ok()

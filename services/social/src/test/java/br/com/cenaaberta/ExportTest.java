@@ -25,23 +25,25 @@ class ExportTest {
         return files;
     }
 
-    @Test void zipHasFiveCsvsWithBomOnlyWithOwnData() throws IOException {
+    @Test void zipHasSixCsvsWithBomOnlyWithOwnData() throws IOException {
         db.update("insert into library(actor,title,watched,rating,review) values(?,'demo-a',true,8,'=HYPERLINK(\"x\")'),(?,'demo-b',true,2,'da Bia')",ANA,BIA);
         db.update("insert into viewing(id,actor,title,watched_on,rewatch) values('v1',?,'demo-a',date '2025-01-02',false)",ANA);
         db.update("insert into collection(id,actor,name,description) values('c1',?,'Ação, \"top\"','')",ANA);
         db.update("insert into collection_item(collection_id,title,position) values('c1','demo-a',0)");
+        db.update("insert into actor_provider(actor,provider) values(?,119),(?,8),(?,337)",ANA,ANA,BIA);
         var response=service.export(ANA);
         assertEquals("application/zip",response.getHeaders().getContentType().toString());
         assertTrue(response.getHeaders().getContentDisposition().isAttachment());
         assertTrue(response.getHeaders().getContentDisposition().getFilename().matches("cena-aberta-\\d{4}-\\d{2}-\\d{2}\\.zip"));
         var files=unzip(response.getBody());
-        assertEquals(List.of("biblioteca.csv","diario.csv","ranking.csv","colecoes.csv","episodios.csv"),new ArrayList<>(files.keySet()));
+        assertEquals(List.of("biblioteca.csv","diario.csv","ranking.csv","colecoes.csv","episodios.csv","streamings.csv"),new ArrayList<>(files.keySet()));
         files.values().forEach(content -> assertTrue(content.startsWith("﻿")));
         assertTrue(files.get("biblioteca.csv").contains("demo-a,sim,não,não,8,\"'=HYPERLINK(\"\"x\"\")\""));
         assertFalse(files.get("biblioteca.csv").contains("da Bia"));
         assertTrue(files.get("diario.csv").contains("v1,demo-a,2025-01-02,não"));
         assertTrue(files.get("colecoes.csv").contains("c1,\"Ação, \"\"top\"\"\",,0,demo-a"));
         assertEquals("﻿obra,temporada,episodio,nota\r\n",files.get("episodios.csv"));
+        assertEquals("﻿servico_tmdb\r\n8\r\n119\r\n",files.get("streamings.csv"));
     }
 
     @Test void suspendedActorCannotExport() {

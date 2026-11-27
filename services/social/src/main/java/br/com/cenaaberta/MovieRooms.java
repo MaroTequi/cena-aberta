@@ -19,7 +19,8 @@ public class MovieRooms {
     record Create(String name) {}
     record Vote(Boolean liked) {}
     record Invitation(String username) {}
-    record Settings(Integer genre,List<Integer> genres,String type) {
+    record Settings(Integer genre,List<Integer> genres,String type,Boolean subscribedOnly) {
+        Settings(Integer genre,List<Integer> genres,String type){this(genre,genres,type,null);}
         Settings(Integer genre,List<Integer> genres){this(genre,genres,null);}
         Settings(Integer genre){this(genre,null);}
     }
@@ -27,6 +28,19 @@ public class MovieRooms {
     private List<Integer> genres(Map<String,Object> room) {
         String value=Objects.toString(room.get("genres"),"");
         return value.isBlank()?List.of():Arrays.stream(value.split(",")).map(Integer::valueOf).toList();
+    }
+    private static final String NO_PROVIDERS="Ninguém da sala informou os streamings que assina. Marquem em Configurações ou desliguem o filtro.";
+    private boolean subscribedOnly(Map<String,Object> room){return Boolean.TRUE.equals(room.get("subscribed_only"));}
+    /** Serviços de streaming assinados por algum participante ativo da sala (até 8 pessoas com até 60 cada). */
+    private List<Integer> providers(String id) {
+        return db.queryForList("select distinct ap.provider from actor_provider ap join movie_room_member m on m.actor=ap.actor join profile p on p.actor=m.actor where m.room=? and p.active=true order by ap.provider",Integer.class,id);
+    }
+    /** Serviços que valem como filtro: vazio quando o filtro está desligado; 409 quando ligado sem nenhum serviço. */
+    private List<Integer> requiredProviders(Map<String,Object> room,String id) {
+        if(!subscribedOnly(room))return List.of();
+        var found=providers(id);
+        if(found.isEmpty())fail(HttpStatus.CONFLICT,NO_PROVIDERS);
+        return found;
     }
     private final JdbcTemplate db;
     private final ObjectMapper mapper;
@@ -141,7 +155,8 @@ public class MovieRooms {
         String type=input.type()==null?(String)r.get("media_type"):input.type();
         if(!Set.of("movie","tv","anime","all").contains(type))fail(HttpStatus.BAD_REQUEST,"Tipo de obra inválido.");
         List<Integer> selected=input.genres();
-        if(selected==null && input.genre()==null && input.type()!=null)selected=genres(r);
+        if(selected==null && input.genre()==null && (input.type()!=null||input.subscribedOnly()!=null))selected=genres(r);
+        boolean subscribedOnly=input.subscribedOnly()==null?subscribedOnly(r):input.subscribedOnly();
         if(selected==null) {
             if(input.genre()==null)fail(HttpStatus.BAD_REQUEST,"Informe os gêneros.");
             selected=input.genre()==0?List.of():List.of(input.genre());
@@ -149,8 +164,8 @@ public class MovieRooms {
         if(selected.size()>GENRES.size()||selected.stream().anyMatch(g->g==null||!GENRES.contains(g)))fail(HttpStatus.BAD_REQUEST,"Gênero inválido.");
         selected=selected.stream().distinct().sorted().toList();
         int legacy=selected.isEmpty()?0:selected.getFirst();
-        db.update("update movie_room set genre=?,genres=?,media_type=? where id=?",legacy,selected.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),type,id);
-        return Map.of("genre",legacy,"genres",selected,"type",type);
+        db.update("update movie_room set genre=?,genres=?,media_type=?,subscribed_only=? where id=?",legacy,selected.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),type,subscribedOnly,id);
+        return Map.of("genre",legacy,"genres",selected,"type",type,"subscribedOnly",subscribedOnly);
     }
     @PostMapping("/{id}/start")
     @Transactional
@@ -159,6 +174,7 @@ public class MovieRooms {
         if(!r.get("status").equals("lobby"))return Map.of("id",id);
         int count=db.queryForObject("select count(*) from movie_room_member where room=?",Integer.class,id);
         if(count<2)fail(HttpStatus.CONFLICT,"Convide pelo menos mais uma pessoa antes de começar.");
+        String providerFilter=requiredProviders(r,id).stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
         var ids=db.queryForList("select distinct l.title from library l join movie_room_member m on m.actor=l.actor join profile p on p.actor=m.actor where m.room=? and l.interest=true and p.active=true",String.class,id);
         Collections.shuffle(ids);
         List<Map<String,Object>> deck=new ArrayList<>();
@@ -168,7 +184,7 @@ public class MovieRooms {
             for(int i=0;i<ids.size()&&deck.size()<60;i+=30){
                 String group=String.join(",",ids.subList(i,Math.min(i+30,ids.size())));
                 if(!group.matches("[a-z0-9,\\-]+"))throw new IllegalArgumentException();
-                var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/title-batch?ids="+group+"&genres="+Objects.toString(r.get("genres"),""))).header("X-Internal-Key",catalogKey).timeout(Duration.ofSeconds(25)).GET().build(),HttpResponse.BodyHandlers.ofString());
+                var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/title-batch?ids="+group+"&genres="+Objects.toString(r.get("genres"),"")+(providerFilter.isEmpty()?"":"&providers="+providerFilter))).header("X-Internal-Key",catalogKey).timeout(Duration.ofSeconds(25)).GET().build(),HttpResponse.BodyHandlers.ofString());
                 if(response.statusCode()!=200)throw new IllegalStateException();
                 for(var title:mapper.readTree(response.body()))if(matchesType(title,(String)r.get("media_type"))){
                     Map<String,Object> film=new LinkedHashMap<>();
@@ -201,7 +217,7 @@ public class MovieRooms {
         var liked=db.queryForList("select title from movie_room_vote where room=? and liked=true group by title order by count(*) desc limit 40",String.class,id);
         try {
             var settings=room(id,false);
-            var payload=mapper.writeValueAsString(Map.of("exclude",excluded,"watched",watched,"liked",liked,"page",page,"genres",genres(settings),"type",settings.get("media_type")));
+            var payload=mapper.writeValueAsString(Map.of("exclude",excluded,"watched",watched,"liked",liked,"page",page,"genres",genres(settings),"type",settings.get("media_type"),"providers",requiredProviders(settings,id)));
             var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/suggestions")).header("X-Internal-Key",catalogKey).header("Content-Type","application/json").timeout(Duration.ofSeconds(25)).POST(HttpRequest.BodyPublishers.ofString(payload)).build(),HttpResponse.BodyHandlers.ofString());
             if(response.statusCode()!=200)throw new IllegalStateException();
             var data=mapper.readTree(response.body());int position=excluded.size();
@@ -243,6 +259,9 @@ public class MovieRooms {
         var members=db.queryForList("select case when p.active then p.username else '' end as username,case when p.active then p.name else 'Conta indisponível' end as name,case when p.active then p.avatar else '' end as avatar,p.active,(select count(*) from movie_room_vote v where v.room=m.room and v.actor=m.actor) as voted from movie_room_member m join profile p on p.actor=m.actor where m.room=? order by m.joined,p.username",id);
         for(var participant:members)participant.put("isSelf",Objects.equals(participant.get("username"),db.queryForObject("select username from profile where actor=?",String.class,actor)));
         result.put("members",members);result.put("genre",r.get("genre"));result.put("genres",genres(r));result.put("type",r.get("media_type"));
+        result.put("subscribedOnly",subscribedOnly(r));
+        // Só a quantidade: a lista revelaria a outros participantes o que cada pessoa assina.
+        result.put("providerCount",providers(id).size());
         var titles=db.queryForList("select snapshot from movie_room_title where room=? order by position",String.class,id);
         result.put("titles",titles.stream().map(s->{try{return mapper.readTree(s);}catch(Exception e){throw new IllegalStateException(e);}}).toList());
         result.put("votes",db.queryForList("select title,liked from movie_room_vote where room=? and actor=?",id,actor));
