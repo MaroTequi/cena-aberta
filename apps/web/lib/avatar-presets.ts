@@ -1,50 +1,50 @@
 export const avatarPresets = [
   {
-    "id": "cinema",
-    "label": "Direção"
+    id: "cinema",
+    label: "Direção",
   },
   {
-    "id": "estrelas",
-    "label": "Sessão pipoca"
+    id: "estrelas",
+    label: "Sessão pipoca",
   },
   {
-    "id": "fantasia",
-    "label": "Dragão"
+    id: "fantasia",
+    label: "Dragão",
   },
   {
-    "id": "espaco",
-    "label": "Astronauta"
+    id: "espaco",
+    label: "Astronauta",
   },
   {
-    "id": "misterio",
-    "label": "Detetive"
+    id: "misterio",
+    label: "Detetive",
   },
   {
-    "id": "animacao",
-    "label": "Raposa"
+    id: "animacao",
+    label: "Raposa",
   },
   {
-    "id": "ninja",
-    "label": "Ninja"
+    id: "ninja",
+    label: "Ninja",
   },
   {
-    "id": "samurai",
-    "label": "Samurai"
+    id: "samurai",
+    label: "Samurai",
   },
   {
-    "id": "robo",
-    "label": "Mecha"
+    id: "robo",
+    label: "Mecha",
   },
   {
-    "id": "mago",
-    "label": "Mago"
+    id: "mago",
+    label: "Mago",
   },
   {
-    "id": "series",
-    "label": "Retrô TV"
+    id: "series",
+    label: "Retrô TV",
   },
   {
-    "id": "retro",
-    "label": "Robô retrô"
-  }
+    id: "retro",
+    label: "Robô retrô",
+  },
 ];

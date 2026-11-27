@@ -18,13 +18,13 @@ class MovieRoomsTest {
     JdbcTemplate db;MovieRooms rooms;HttpServer server;
     @BeforeEach void setup() throws Exception {
         var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V10__movie_rooms.sql"),new ClassPathResource("db/migration/V11__room_suggestions.sql"),new ClassPathResource("db/migration/V14__room_genre.sql"),new ClassPathResource("db/migration/V17__room_reconsideration.sql"),new ClassPathResource("db/migration/V18__room_multiple_genres.sql"),new ClassPathResource("db/migration/V15__friendships.sql"),new ClassPathResource("db/migration/V19__room_invitations.sql")).execute(source);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V10__movie_rooms.sql"),new ClassPathResource("db/migration/V11__room_suggestions.sql"),new ClassPathResource("db/migration/V14__room_genre.sql"),new ClassPathResource("db/migration/V17__room_reconsideration.sql"),new ClassPathResource("db/migration/V18__room_multiple_genres.sql"),new ClassPathResource("db/migration/V15__friendships.sql"),new ClassPathResource("db/migration/V19__room_invitations.sql"),new ClassPathResource("db/migration/V23__room_end_notices.sql"),new ClassPathResource("db/migration/V26__room_media_type.sql")).execute(source);
         db=new JdbcTemplate(source);
         for(String actor:List.of("a","b","c"))db.update("insert into profile(actor,username,name) values(?,?,?)",actor,actor,actor);
         server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/title-batch",exchange->{
             assertEquals("catalog-key",exchange.getRequestHeaders().getFirst("X-Internal-Key"));
-            String json="[{\"id\":\"demo-film\",\"format\":\"movie\",\"name\":\"Film\"},{\"id\":\"demo-anime\",\"format\":\"movie\",\"name\":\"Anime\"},{\"id\":\"demo-series\",\"format\":\"tv\",\"name\":\"Series\"}]";
+            String json="[{\"id\":\"demo-film\",\"format\":\"movie\",\"name\":\"Film\"},{\"id\":\"demo-anime\",\"format\":\"movie\",\"name\":\"Anime\",\"anime\":true},{\"id\":\"demo-series\",\"format\":\"tv\",\"name\":\"Series\"}]";
             byte[] bytes=json.getBytes(StandardCharsets.UTF_8);exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
         });
         server.createContext("/suggestions",exchange->{
@@ -33,7 +33,7 @@ class MovieRoomsTest {
             String json="{\"items\":[{\"id\":\"tmdb-movie-"+page+"\",\"format\":\"movie\",\"name\":\"Suggestion\"}],\"nextPage\":"+(page+2)+"}";
             byte[] bytes=json.getBytes(StandardCharsets.UTF_8);exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
         });server.start();
-        rooms=new MovieRooms(db,new ObjectMapper(),"internal-key","catalog-key","http://127.0.0.1:"+server.getAddress().getPort());
+        rooms=new MovieRooms(db,new ObjectMapper(),"catalog-key","http://127.0.0.1:"+server.getAddress().getPort());
     }
     @AfterEach void close(){server.stop(0);}
     void watch(String actor,String title){db.update("insert into library(actor,title,interest) values(?,?,true)",actor,title);}
@@ -61,6 +61,37 @@ class MovieRoomsTest {
         assertEquals(List.of("demo-film"),rooms.state("a",second).get("matches"));rooms.choose("a",second,"demo-film");
         assertEquals(List.of(),rooms.state("c",second).get("reconsiderations"));
     }
+    @Test void lastGuestCanLeaveBeforeVotingOrAfterChoiceWithoutClosingRoom(){
+        watch("a","demo-film");
+        String id=rooms.create("a",new MovieRooms.Create("Dupla")).get("id");
+        rooms.join("b",id);
+        assertFalse(rooms.leave("b",id).get("dissolved"));
+        assertEquals("lobby",rooms.state("a",id).get("status"));
+        rooms.join("b",id);rooms.start("a",id);
+        for(String actor:List.of("a","b"))rooms.vote(actor,id,"demo-film",new MovieRooms.Vote(true));
+        rooms.choose("a",id,"demo-film");
+        assertFalse(rooms.leave("b",id).get("dissolved"));
+        var room=rooms.state("a",id);
+        assertEquals("chosen",room.get("status"));assertEquals("demo-film",room.get("chosen"));
+        assertEquals(1,((List<?>)room.get("members")).size());
+        assertEquals(0,db.queryForObject("select count(*) from room_end_notice where room=? and visible_at<=CURRENT_TIMESTAMP",Integer.class,id));
+    }
+    @Test void guestLeaveRecountsVotesAndLastPairGetsNotified(){
+        watch("a","demo-film");
+        String id=rooms.create("a",new MovieRooms.Create("Rodada")).get("id");
+        assertThrows(ResponseStatusException.class,()->rooms.leave("c",id));
+        rooms.join("b",id);rooms.join("c",id);rooms.start("a",id);
+        assertThrows(ResponseStatusException.class,()->rooms.leave("a",id));
+        rooms.vote("a",id,"demo-film",new MovieRooms.Vote(true));
+        rooms.vote("b",id,"demo-film",new MovieRooms.Vote(true));
+        rooms.vote("c",id,"demo-film",new MovieRooms.Vote(false));
+        assertEquals(false,rooms.leave("c",id).get("dissolved"));
+        assertEquals(List.of("demo-film"),rooms.state("a",id).get("matches"));
+        assertEquals(true,rooms.leave("b",id).get("dissolved"));
+        assertEquals(List.of("a","b"),db.queryForList("select recipient from room_end_notice where room=? and reason='closedByLeave' and visible_at<=CURRENT_TIMESTAMP order by recipient",String.class,id));
+        assertEquals(410,assertThrows(ResponseStatusException.class,()->rooms.state("a",id)).getStatusCode().value());
+        assertEquals(404,assertThrows(ResponseStatusException.class,()->rooms.state("c",id)).getStatusCode().value());
+    }
     @Test void onlyOwnerCanDeleteRoomAndDependentData(){
         watch("a","demo-film");String id=rooms.create("a",new MovieRooms.Create("Excluir teste")).get("id");rooms.join("b",id);rooms.start("a",id);
         rooms.vote("b",id,"demo-film",new MovieRooms.Vote(true));
@@ -71,6 +102,17 @@ class MovieRoomsTest {
         assertThrows(ResponseStatusException.class,()->rooms.state("a",id));assertTrue(rooms.mine("b").isEmpty());
         assertEquals(1,db.queryForObject("select count(*) from library where actor='a'",Integer.class));
     }
+    @Test void roomTypeFiltersTheWatchlistsBeforeVoting(){
+        for(String title:List.of("demo-film","demo-series","demo-anime"))watch("b",title);
+        var expected=Map.of("all",Set.of("demo-film","demo-series","demo-anime"),"tv",Set.of("demo-series"),"anime",Set.of("demo-anime"));
+        for(var entry:expected.entrySet()){
+            String id=rooms.create("a",new MovieRooms.Create("Sala")).get("id");
+            rooms.join("b",id);
+            rooms.settings("a",id,new MovieRooms.Settings(null,null,entry.getKey()));
+            rooms.start("a",id);
+            assertEquals(entry.getValue(),new HashSet<>(db.queryForList("select title from movie_room_title where room=?",String.class,id)));
+        }
+    }
     @Test void mergedWatchlistsDeduplicateFilterSeriesAndRequireUnanimity(){
         watch("a","demo-film");watch("b","demo-film");watch("b","demo-anime");watch("b","demo-series");
         String id=rooms.create("a",new MovieRooms.Create("Cinema")).get("id");
@@ -79,7 +121,7 @@ class MovieRoomsTest {
         rooms.join("b",id);rooms.join("b",id);
         assertThrows(ResponseStatusException.class,()->rooms.start("b",id));
         assertThrows(ResponseStatusException.class,()->rooms.settings("b",id,new MovieRooms.Settings(28)));
-        rooms.settings("a",id,new MovieRooms.Settings(28));
+        rooms.settings("a",id,new MovieRooms.Settings(28,null,"movie"));
         assertEquals(28,rooms.state("a",id).get("genre"));
         rooms.start("a",id);
         assertThrows(ResponseStatusException.class,()->rooms.settings("a",id,new MovieRooms.Settings(35)));
@@ -118,10 +160,9 @@ class MovieRoomsTest {
         assertThrows(ResponseStatusException.class,()->rooms.state("a",id));
         assertTrue(rooms.mine("a").isEmpty());
     }
-    @Test void requiresInternalAuthenticationAndActiveProfile(){
+    @Test void requiresActiveProfile(){
         var request=new MockHttpServletRequest();request.addHeader("X-Actor","a");
-        assertThrows(ResponseStatusException.class,()->rooms.verify(request));
-        request.addHeader("X-Internal-Key","internal-key");rooms.verify(request);
+        rooms.verify(request);
         db.update("update profile set active=false where actor='a'");
         assertThrows(ResponseStatusException.class,()->rooms.verify(request));
     }

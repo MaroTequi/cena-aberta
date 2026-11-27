@@ -53,12 +53,18 @@ const mock=createServer((req,res)=>{
   if(url.searchParams.get("query")==="limite"){res.statusCode=429;res.end("{}");return;}
   const film={id:777,title:"Filme simulado",original_title:"Mock Movie",release_date:"2024-01-01",original_language:"pt",overview:"Sinopse",poster_path:"/example.jpg"};
   const series={id:777,name:"Série simulada",original_language:"ja",first_air_date:"2025-01-01",genre_ids:[16]};
-  if(url.pathname==="/3/search/movie") res.end(JSON.stringify({results:[film],total_pages:2}));
+  if(url.pathname==="/3/search/movie") res.end(JSON.stringify({results:[url.searchParams.get("query")==="sem-generos"?{...film,id:800}: {...film,genre_ids:[18]}],total_pages:2}));
   else if(url.pathname==="/3/discover/movie"&&url.searchParams.has("primary_release_date.lte"))res.end(JSON.stringify({results:[{...film,vote_count:500,vote_average:8},{...film,id:778,adult:true},{...film,id:779,release_date:"2099-01-01"}],total_pages:2}));
   else if(url.pathname==="/3/discover/movie")res.end(JSON.stringify({results:[],total_pages:1}));
   else if(url.pathname==="/3/discover/tv")res.end(JSON.stringify({results:[series],total_pages:1}));
-  else if(url.pathname==="/3/movie/777")res.end(JSON.stringify({...film,runtime:124,genres:[{name:"Drama"}],credits:{crew:[{job:"Director",name:"Diretora Exemplo"}],cast:[{name:"Artista Exemplo"}]}}));
-  else if(url.pathname==="/3/tv/777")res.end(JSON.stringify({...series,number_of_seasons:2,number_of_episodes:24,created_by:[{name:"Criadora Exemplo"}]}));
+  else if((url.pathname==="/3/movie/777"||url.pathname==="/3/movie/800"))res.end(JSON.stringify({...film,id:Number(url.pathname.split("/").pop()),belongs_to_collection:{id:555},runtime:124,genres:[{name:"Drama"}],credits:{crew:[{id:20,job:"Director",name:"Diretora Exemplo",profile_path:"/example.jpg"}],cast:[{id:21,name:"Artista Exemplo",character:"A protagonista"}]}}));
+  else if(url.pathname==="/3/collection/555")res.end(JSON.stringify({parts:[film,{...film,id:778,title:"Continuação",release_date:"2025-02-01"},{...film,id:779,adult:true}]}));
+  else if(url.pathname==="/3/tv/777/season/0")res.end(JSON.stringify({episodes:[{episode_number:1,name:"OVA: O reencontro",air_date:"2025-06-01"},{episode_number:2,name:"Especial de inverno",air_date:null}]}));
+  else if(url.pathname==="/3/person/20")res.end(JSON.stringify({name:"Diretora Exemplo",profile_path:"/example.jpg",biography:"Biografia de teste",combined_credits:{
+    cast:[{...series,media_type:"tv",character:"Narradora"}],
+    crew:["Director","Producer"].map(job=>({...film,media_type:"movie",job}))
+  }}));
+  else if(url.pathname==="/3/tv/777")res.end(JSON.stringify({...series,number_of_seasons:2,number_of_episodes:24,seasons:[{season_number:0,episode_count:2}],created_by:[{id:22,name:"Criadora Exemplo"}],aggregate_credits:{crew:[{id:22,name:"Criadora Exemplo",jobs:[{job:"Executive Producer"}]}]}}));
   else {res.statusCode=404;res.end("{}");}
 });
 function start(command, args, env, cwd) {
@@ -98,6 +104,7 @@ try {
   const soc=start("java",["-jar","services/social/target/social-0.1.0-alpha.jar"],{...database("social"),PORT:"19182",INTERNAL_SECRET:key,CATALOG_INTERNAL_SECRET:key,CATALOG_URL:catalog,INVITE_ONLY:"true",INVITED_EMAILS:email.toUpperCase(),EMAIL_MODE:"log",FRONTEND_URL:"http://127.0.0.1:19180"});
   await Promise.all([ready(catalog+"/health",cat),ready(social+"/health",soc)]);
   await request(catalog,"/titles",{authorized:false,expected:401});
+  await request(social,"/me",{authorized:false,expected:401});
   const anime=await request(catalog,"/titles?type=anime");
   assert.deepEqual(anime.items.map(item=>item.format).sort(),["movie","tv"]);
   assert.equal((await request(catalog,"/titles?query=mare")).items[0].id,"demo-mare-alta");
@@ -115,6 +122,15 @@ try {
   assert.equal(searchBatch.length,1,"Filme encontrado na busca desaparece do perfil antes de abrir o card.");
   assert.equal(searchBatch[0].name,search.items[0].name);
   assert.equal(searchBatch[0].poster,search.items[0].poster);
+  const beforeFilter=mockCalls.length;
+  assert.equal((await request(realMode,"/title-batch?ids=tmdb-movie-777&genres=35,18")).length,1);
+  assert.equal((await request(realMode,"/title-batch?ids=tmdb-movie-777&genre=35")).length,0);
+  assert.equal(mockCalls.length,beforeFilter,"Gêneros da busca devem dispensar consultas de detalhes.");
+  await request(realMode,"/titles?type=movie&query=sem-generos");
+  const beforeFallback=mockCalls.length;
+  assert.equal((await request(realMode,"/title-batch?ids=tmdb-movie-800&genre=18")).length,1);
+  assert.equal(mockCalls.length,beforeFallback+1);
+  assert.equal(mockCalls.at(-1).pathname,"/3/movie/800");
   const coldBatch=await request(realMode,"/title-batch?ids=tmdb-tv-777");
   assert.equal(coldBatch.length,1,"Título salvo sem cache precisa ser resolvido no lote.");
   const externalAnime=await request(realMode,"/titles?type=anime");
@@ -123,11 +139,26 @@ try {
   const film=await request(realMode,"/titles/tmdb-movie-777");
   assert.match(film.poster,/image\.tmdb\.org/);
   assert.equal(mockCalls.at(-1).searchParams.get("append_to_response"),"credits");
-  assert.deepEqual(film.details,{genres:["Drama"],runtime:124,seasons:null,episodes:null,directors:["Diretora Exemplo"],creators:[],cast:["Artista Exemplo"]});
+  assert.deepEqual(film.details,{genres:["Drama"],runtime:124,seasons:null,episodes:null,directors:["Diretora Exemplo"],creators:[],cast:["Artista Exemplo"],people:[
+    {id:21,name:"Artista Exemplo",photo:null,roles:["A protagonista"],castMember:true},
+    {id:20,name:"Diretora Exemplo",photo:"https://image.tmdb.org/t/p/w185/example.jpg",roles:["Director"],castMember:false}
+  ]});
   const seriesDetail=await request(realMode,"/titles/tmdb-tv-777");
   assert.equal(seriesDetail.details.episodes,24);
   assert.equal(seriesDetail.details.seasons,2);
   assert.deepEqual(seriesDetail.details.creators,["Criadora Exemplo"]);
+  assert.deepEqual(seriesDetail.details.people[0].roles,["Creator","Executive Producer"]);
+  const person=await request(realMode,"/people/20");
+  assert.deepEqual(person.works.map(work=>work.poster),[null,"https://image.tmdb.org/t/p/w185/example.jpg"]);
+  assert.equal(person.biography,"Biografia de teste");
+  assert.deepEqual(person.works.map(work=>[work.id,work.roles]),[["tmdb-tv-777",["Narradora"]],["tmdb-movie-777",["Director","Producer"]]]);
+  await request(realMode,"/people/20",{authorized:false,expected:401});
+  const chronology=await request(realMode,"/chronology/tmdb-movie-777");
+  assert.deepEqual(chronology.map(item=>item.work),["tmdb-movie-777","tmdb-movie-778"]);
+  const specials=await request(realMode,"/chronology/tmdb-tv-777");
+  assert.deepEqual(specials.map(item=>item.kind),["Série","OVA","Especial"]);
+  assert.equal(specials[2].date,"");
+  await request(realMode,"/chronology/tmdb-tv-777",{authorized:false,expected:401});
   const calls=mockCalls.length;
   assert.deepEqual(await request(realMode,"/titles/tmdb-movie-777"),film);
   assert.equal(mockCalls.length,calls);
@@ -144,6 +175,10 @@ try {
   await request(realMode,"/title-batch?ids=tmdb-movie-777&genres=999",{expected:400});
   await request(realMode,"/suggestions",{method:"POST",body:{exclude:[],watched:[],liked:[],page:1,genres:[18,35]}});
   assert.equal(mockCalls.at(-1).searchParams.get("with_genres"),"18|35");
+  for(const [type,expected] of [["all",["tmdb-movie-777","tmdb-tv-777"]],["tv",["tmdb-tv-777"]],["anime",["tmdb-tv-777"]]]){
+    const page=await request(realMode,"/suggestions",{method:"POST",body:{exclude:[],watched:[],liked:[],page:1,type}});
+    assert.deepEqual(page.items.map(t=>t.id).sort(),expected);
+  }
   const exhausted=await request(realMode,"/suggestions",{method:"POST",body:{exclude:["tmdb-movie-777"],watched:[],liked:[],page:3}});
   assert.equal(exhausted.items.length,0,"Sugestões não podem repetir filmes da sala.");
   console.log("TMDB simulado verificado: token, PT-BR, busca, anime, detalhes, persistência e limite de consultas.");
@@ -164,10 +199,28 @@ try {
   assert.equal(ratedSeries.interest,false);
   assert.equal((await request(social,episodePath))[0].rating,7);
   assert.deepEqual(await request(social,episodePath,{user:"demo_second_user"}),[]);
+  const episodeId="ep-demo-mare-alta-s1-e1";
+  assert.equal((await request(catalog,"/titles/"+episodeId)).name,"Piloto");
+  const animeEpisodeId="ep-demo-neon-norte-s1-e1";
+  const episodeKinds=await request(catalog,"/title-batch?ids="+episodeId+","+animeEpisodeId);
+  assert.equal(episodeKinds.find(item=>item.id===episodeId).anime,false);
+  assert.equal(episodeKinds.find(item=>item.id===animeEpisodeId).anime,true);
+  const episodeEntry=(await request(social,"/me?title="+episodeId)).library.find(item=>item.title===episodeId);
+  assert.equal(episodeEntry.rating,7);
+  assert.equal(episodeEntry.watched,true);
+  const changeEpisode=(action,body)=>request(social,"/me/library/"+episodeId+"/"+action,{method:"PUT",body});
+  await changeEpisode("rating",{rating:8});
+  assert.equal((await request(social,episodePath))[0].rating,8);
+  await changeEpisode("rating",{rating:7});
+
   const seriesCommunity="/titles/demo-mare-alta/community";
   const seriesVisibility="/me/library/demo-mare-alta/visibility";
   assert.equal(ratedSeries.evaluation_public,true);assert.equal(ratedSeries.spoiler,false);
   assert.equal((await request(social,seriesCommunity)).average,3.5);
+  await changeEpisode("visibility",{value:false});
+  assert.equal((await request(social,"/titles/"+episodeId+"/community")).average,null);
+  assert.equal((await request(social,seriesCommunity)).average,null);
+  await changeEpisode("visibility",{value:true});
   await request(social,seriesVisibility,{method:"PUT",body:{value:false}});
   assert.equal((await request(social,seriesCommunity)).average,null);
   await request(social,seriesVisibility,{method:"PUT",body:{value:true}});
@@ -179,14 +232,22 @@ try {
   const seriesStats=await request(social,seriesCommunity);
   assert.equal(seriesStats.rating_count,2);
   assert.equal(seriesStats.episode_rating_count,3);
-  assert.ok(Math.abs(seriesStats.average-13/3)<0.0001);
+  assert.equal(seriesStats.average,4.5);
   const laterEpisode="/me/episodes/demo-mare-alta/2/1";
   await request(social,laterEpisode,{method:"PUT",body:{rating:2}});
   const twoSeasons=await request(social,seriesCommunity);
-  assert.ok(Math.abs(twoSeasons.average-(13/3+1)/2)<0.0001);
+  assert.equal(twoSeasons.average,3);
   assert.equal(twoSeasons.rating_count,2);
   assert.equal(twoSeasons.seasons[1].average,1);
   assert.deepEqual(await request(social,"/me/episodes/demo-mare-alta"),[{season:1,average:4},{season:2,average:1}]);
+  assert.deepEqual((await request(social,"/me/ranking")).automatic,[{title:"demo-mare-alta",tier:2,average:2.5}]);
+  await request(social,"/me/library/ep-demo-mare-alta-s2-e1/rating",{method:"PUT",body:{rating:3}});
+  assert.deepEqual((await request(social,"/me/ranking")).automatic,[{title:"demo-mare-alta",tier:2,average:3}]);
+  await request(social,"/me/library/ep-demo-mare-alta-s2-e1/visibility",{method:"PUT",body:{value:false}});
+  await request(social,"/me/visibility",{method:"PUT",body:{section:"ranking",visible:true}});
+  const visibleRanking=await request(social,"/profiles/testador",{user:"demo_second_user"});
+  assert.deepEqual(visibleRanking.ranking,[{title:"demo-mare-alta",tier:1,average:4}]);
+  await request(social,"/me/visibility",{method:"PUT",body:{section:"ranking",visible:false}});
   await request(social,"/me/library/demo-mare-alta/rating",{method:"PUT",body:{rating:10},expected:400});
   await request(social,laterEpisode,{method:"PUT",body:{rating:null}});
   await request(social,seriesVisibility,{method:"PUT",body:{value:false}});
@@ -219,11 +280,8 @@ try {
   await request(social,"/me/ranking",{method:"PUT",body:{version:ranked.version,items:[{title,tier:8}]},expected:400});
   await request(social,"/me/library/demo-mare-alta/watched",{method:"PUT",body:{value:true}});
   const seriesRank="/me/ranking/demo-mare-alta";
-  const mixed=await request(social,seriesRank,{method:"PUT",body:{tier:0}});
-  assert.deepEqual(mixed.items,[{title,tier:0},{title:"demo-mare-alta",tier:0}]);
-  const reordered=await request(social,"/me/ranking",{method:"PUT",body:{version:mixed.version,items:[...mixed.items].reverse()}});
-  assert.deepEqual(reordered.items,[...mixed.items].reverse());
-  await request(social,seriesRank,{method:"PUT",body:{tier:-1}});
+  await request(social,seriesRank,{method:"PUT",body:{tier:0},expected:400});
+  await request(social,"/me/ranking",{method:"PUT",body:{version:ranked.version,items:[{title:"demo-mare-alta",tier:0}]},expected:400});
   assert.deepEqual((await request(social,"/me/ranking")).items,[{title,tier:0}]);
   assert.deepEqual((await request(social,"/me/ranking",{user:"demo_second_user"})).items,[]);
   await change("watched",{value:false});
@@ -268,9 +326,6 @@ try {
   await request(social,"/me/viewings",{...viewing,body:{title,watchedAt,rewatch:true},idem:"viewing-test-2"});
   await request(social,"/me/viewings/"+first.id,{method:"DELETE",user:"demo_second_user",expected:404});
   await request(social,"/me/viewings/"+first.id,{method:"DELETE"});
-  const list=await request(social,"/me/lists",{method:"POST",idem:"list-test-1",body:{name:"Minha lista",items:[title,"demo-mare-alta"]}});
-  const updated=["demo-mare-alta",title];
-  await request(social,"/me/lists/"+list.id,{method:"PUT",body:{name:"Minha lista",items:updated,version:0}});
   const me=await request(social,"/me");
   const filmViewings=me.viewings.filter(v=>v.title===title);
   assert.equal(filmViewings.length,2);
@@ -279,9 +334,32 @@ try {
   assert.equal(new Date(filmViewings[1].watched_at).toISOString(),new Date(watchedAt).toISOString());
   assert.equal(filmViewings[1].rewatch,true);
   assert.equal(me.library[0].rating,8);
-  assert.deepEqual(me.lists[0].items,updated);
+  assert.equal("lists" in me,false);
   const publicProfile=await request(social,"/profiles/testador",{user:"demo_second_user"});
   assert.deepEqual(publicProfile.viewings,[]);
+  await request(social,"/diary?username=testador&page=2",{user:"demo_second_user",expected:403});
+  await request(social,"/diary?page=0",{expected:400});
+  const expectedSessions=new Set(me.viewings.map(item=>item.id));
+  for(let i=0;i<100;i++){
+    const result=await request(social,"/me/viewings",{...viewing,idem:"paged-diary-"+i});
+    expectedSessions.add(result.id);
+  }
+  const pagedProfile=await request(social,"/me");
+  assert.equal(pagedProfile.diaryHasMore,true);
+  const collected=pagedProfile.viewings.map(item=>item.id);
+  for(let page=2;page<=5;page++){
+    const result=await request(social,"/diary?page="+page);
+    collected.push(...result.items.map(item=>item.id));
+    assert.equal(result.hasMore,page<5);
+  }
+  assert.equal(collected.length,expectedSessions.size);
+  assert.deepEqual(new Set(collected),expectedSessions);
+  assert.deepEqual(await request(social,"/diary?page=1&title=demo-ultimo-rolo"),{items:[],hasMore:false});
+  const titleHistory=await request(social,"/diary?page=5&title="+title);
+  assert.ok(titleHistory.items.length&&titleHistory.items.every(item=>item.title===title));
+  await request(social,"/diary?page=1&username=testador&title="+title,{user:"demo_second_user",expected:403});
+  assert.deepEqual(await request(social,"/diary?page=6"),{items:[],hasMore:false});
+
   assert.match(publicProfile.profile.avatar,/^data:image\/jpeg;base64,/);
   assert.equal("cpf" in publicProfile.profile,false);
   assert.equal("cpf" in (await request(social,"/me")).profile,false);
@@ -291,7 +369,7 @@ try {
   await profile(actor,"testador",{avatar:""});
   assert.equal((await request(social,"/me")).profile.avatar,"");
   assert.equal(publicProfile.library[0].interest,false);
-  console.log("APIs verificadas: autenticação interna, catálogo, interesse, notas, resenhas, diário, idempotência, propriedade e listas.");
+  console.log("APIs verificadas: autenticação interna, catálogo, interesse, notas, resenhas, diário, idempotência, propriedade e privacidade.");
 
   const app=start(process.execPath,["node_modules/next/dist/bin/next","start","--port","19180","--hostname",useTls?"127.0.0.1":webHost],{
     CATALOG_URL:catalog,SOCIAL_URL:social,NEXTAUTH_URL:web,NEXTAUTH_SECRET:randomUUID(),
@@ -394,6 +472,13 @@ try {
   assert.equal((await roomState.json()).status,"lobby");
   const roomPage=await fetch(web+"/salas?sala="+createdRoom.id,{headers:accountHeaders});
   assert.equal(roomPage.status,200);
+  const savedAvatar=(await (await fetch(web+"/api/v1/me?summary=true",{headers:accountHeaders})).json()).profile.avatar;
+  assert.match(savedAvatar,/^data:image\/jpeg;base64,/);
+  for(const page of [roomPage,await fetch(web+"/salas",{headers:accountHeaders})]){
+    const html=await page.text();
+    const link=html.match(/<a[^>]+class="room-nav-button room-profile-link"[^>]*>[\s\S]*?<\/a>/)?.[0];
+    assert.ok(link?.includes('src="'+savedAvatar+'"'),"Sélete deve mostrar o avatar da conta no cabeçalho.");
+  }
   const roomVisitor=await fetch(web+"/salas?sala="+createdRoom.id,{redirect:"manual"});
   assert.equal(roomVisitor.status,307);
   assert.equal(new URL(roomVisitor.headers.get("location"),web).searchParams.get("next"),"/salas?sala="+createdRoom.id);
@@ -452,6 +537,12 @@ try {
   assert((await friendSearch.json()).some(p=>p.username==="testador"));
   const friendRequest=await fetch(web+"/api/v1/friends",{method:"POST",headers:finalHeaders,body:JSON.stringify({username:"testador"})});
   assert.equal(friendRequest.status,200);const friendship=await friendRequest.json();
+  const notifications=()=>request(social,"/notifications");
+  const hasFriendRequest=async()=>(await notifications()).items.some(i=>i.kind==="friend"&&i.target==="conta_teste");
+  assert(await hasFriendRequest());
+  assert.equal((await fetch(web+"/api/v1/notifications")).status,401);
+  const senderInbox=await fetch(web+"/api/v1/notifications",{headers:finalHeaders});
+  assert.equal(senderInbox.status,200);assert(!(await senderInbox.json()).items.some(i=>i.target==="testador"&&i.kind==="friend"));
   await request(social,"/friends/"+friendship.id,{method:"PUT",user:"demo_second_user",body:{action:"accept"},expected:403});
   await request(social,"/friends/"+friendship.id,{method:"PUT",body:{action:"accept"}});
   const invitedRoom=await (await fetch(web+"/api/v1/rooms",{method:"POST",headers:finalHeaders,body:JSON.stringify({name:"Convite para amigos teste"})})).json();
@@ -459,10 +550,28 @@ try {
   assert((await roomFriends.json()).items.some(p=>p.username==="testador"&&!p.joined&&!p.invited));
   const sendRoomInvite=()=>fetch(web+"/api/v1/rooms/"+invitedRoom.id+"/invite",{method:"POST",headers:finalHeaders,body:JSON.stringify({username:"testador"})});
   assert.equal((await sendRoomInvite()).status,200);assert.equal((await sendRoomInvite()).status,200);
+  const roomNotices=async()=>(await notifications()).items.filter(i=>i.kind==="room"&&i.target===invitedRoom.id);
+  assert(!(await hasFriendRequest()));assert.equal((await roomNotices()).length,1);
   assert((await request(social,"/rooms")).some(r=>r.id===invitedRoom.id&&r.invited));
   await request(social,"/rooms/"+invitedRoom.id,{expected:403});
   await request(social,"/rooms/"+invitedRoom.id+"/join",{method:"POST"});
   assert((await request(social,"/rooms")).some(r=>r.id===invitedRoom.id&&!r.invited));
+  assert.equal((await roomNotices()).length,0);
+  const lobbyExit=await request(social,"/rooms/"+invitedRoom.id+"/leave",{method:"POST"});
+  assert.equal(lobbyExit.dissolved,false);
+  const lobbyAfterExit=await (await fetch(web+"/api/v1/rooms/"+invitedRoom.id,{headers:finalHeaders})).json();
+  assert.equal(lobbyAfterExit.status,"lobby");assert.equal(lobbyAfterExit.members.length,1);
+  await request(social,"/rooms/"+invitedRoom.id+"/join",{method:"POST"});
+  assert.equal((await fetch(web+"/api/v1/rooms/"+invitedRoom.id+"/start",{method:"POST",headers:finalHeaders})).status,200);
+  const left=await request(social,"/rooms/"+invitedRoom.id+"/leave",{method:"POST"});
+  assert(left.dissolved);
+  const endedNotice=item=>item.kind==="closedByLeave"&&item.target===invitedRoom.id;
+  assert((await notifications()).items.some(endedNotice));
+  const ownerNotices=async()=>await (await fetch(web+"/api/v1/notifications",{headers:finalHeaders})).json();
+  assert((await ownerNotices()).items.some(endedNotice));
+  assert.equal((await fetch(web+"/api/v1/notifications/rooms/"+invitedRoom.id+"/read",{method:"PUT",headers:finalHeaders})).status,200);
+  assert(!(await ownerNotices()).items.some(endedNotice));
+  assert((await notifications()).items.some(endedNotice));
   const publicFriends=await fetch(web+"/api/v1/friends/profile?username=testador",{headers:finalHeaders});
   assert.equal(publicFriends.status,200);
   const publicFriendsData=await publicFriends.json();
@@ -490,16 +599,18 @@ try {
   assert.equal(updatedRank.status,200);
   assert.deepEqual((await updatedRank.json()).items,[{title:"demo-lua-de-papel",tier:1}]);
 
+  const retired=await fetch(web+"/api/v1/me/lists",{method:"POST",headers:finalHeaders,body:"{}"});
+  assert.equal(retired.status,404);
+  await request(social,"/me/visibility",{method:"PUT",body:{section:"lists",visible:true},expected:400});
   const visibilityUpdate=async(section,visible)=>{
     const r=await fetch(web+"/api/v1/me/visibility",{method:"PUT",headers:finalHeaders,body:JSON.stringify({section,visible})});assert.equal(r.status,200);
   };
   const visitor=()=>request(social,"/profiles?username=conta_teste");
-  const visibilityList=await fetch(web+"/api/v1/me/lists",{method:"POST",headers:{...finalHeaders,"Idempotency-Key":"visibility-list"},body:JSON.stringify({name:"Lista de teste de privacidade",items:["demo-lua-de-papel"]})});assert.equal(visibilityList.status,200);
   await visibilityUpdate("all",true);
   const shared=await visitor();
-  assert(shared.library.some(i=>i.interest));assert(shared.library.some(i=>i.watched));assert(shared.ranking.length);assert(shared.viewings.length);assert(shared.lists.length);
+  assert(shared.library.some(i=>i.interest));assert(shared.library.some(i=>i.watched));assert(shared.ranking.length);assert(shared.viewings.length);assert.equal("lists" in shared,false);
   await visibilityUpdate("all",false);
-  const hidden=await visitor();for(const field of ["library","ranking","viewings","lists"])assert.deepEqual(hidden[field],[],field+" must be private");
+  const hidden=await visitor();for(const field of ["library","ranking","viewings"])assert.deepEqual(hidden[field],[],field+" must be private");
   const hiddenLegacy=await request(social,"/profiles/conta_teste");assert.deepEqual(hiddenLegacy.library,[]);
   const ownHidden=await fetch(web+"/api/v1/me",{headers:finalHeaders});assert((await ownHidden.json()).library.length);
   await visibilityUpdate("watchlist",true);
@@ -507,12 +618,105 @@ try {
   await visibilityUpdate("watchlist",false);await visibilityUpdate("ranking",true);
   const onlyRanking=await visitor();assert(onlyRanking.ranking.length);assert.deepEqual(onlyRanking.library,[]);
   await visibilityUpdate("ranking",false);await visibilityUpdate("diary",true);
-  const onlyDiary=await visitor();assert(onlyDiary.viewings.length);assert.deepEqual(onlyDiary.library,[]);
-  await visibilityUpdate("diary",false);await visibilityUpdate("lists",true);
-  const onlyLists=await visitor();assert(onlyLists.lists.length);assert.deepEqual(onlyLists.library,[]);assert.deepEqual(onlyLists.viewings,[]);
-  await visibilityUpdate("all",false);await visibilityUpdate("watched",true);await visibilityUpdate("lists",true);
+  const publicDiary=await request(social,"/diary?page=1&username=conta_teste");
+  const onlyDiary=await visitor();assert.deepEqual(publicDiary.items,onlyDiary.viewings);assert(onlyDiary.viewings.length);assert.deepEqual(onlyDiary.library,[]);
+  await visibilityUpdate("all",false);await visibilityUpdate("watched",true);
   assert.equal((await fetch(web+"/api/v1/me/visibility",{method:"PUT",headers:finalHeaders,body:JSON.stringify({section:"actor",visible:true})})).status,400);
   console.log("Privacidade: seções filtradas na API, controle geral e acesso do proprietário verificados.");
+
+  const episodePage=await fetch(web+"/obra/demo-mare-alta/episodios/1/1",{headers:finalHeaders,redirect:"manual"});
+  assert.equal(episodePage.status,200);
+  const episodeApi=async(path,method="GET",body)=>{
+    const response=await fetch(web+"/api/v1/"+path,{method,headers:finalHeaders,body:JSON.stringify(body)});
+    assert.equal(response.status,200,path);
+    return response.json();
+  };
+  const seasonPage=await fetch(web+"/obra/demo-mare-alta/temporadas/1",{headers:finalHeaders,redirect:"manual"});
+  assert.equal(seasonPage.status,200);
+  assert.deepEqual((await episodeApi("titles/demo-mare-alta/seasons")).map(item=>item.number),[1,2]);
+  const seasonId="season-demo-mare-alta-s1";
+  assert.equal((await episodeApi("titles/"+seasonId)).format,"seas");
+  assert.deepEqual((await episodeApi("titles/demo-mare-alta/seasons/1")).map(item=>item.name),["Piloto","Segundo episódio"]);
+  const progressPath="me/season-progress/demo-mare-alta/1";
+  const seasonLibrary="me/library/"+seasonId+"/";
+  const seasonWatched=async()=>Boolean((await episodeApi("me?title="+seasonId)).library[0]?.watched);
+  const putSeason=async(path,body)=>fetch(web+"/api/v1/"+path,{method:"PUT",headers:finalHeaders,body:JSON.stringify(body)});
+  assert.deepEqual(await episodeApi(progressPath),{watched:0,total:2,average:null,rewatched:false,complete:false});
+  assert.equal((await putSeason(seasonLibrary+"watched",{value:true})).status,400);
+  assert.equal((await putSeason(seasonLibrary+"rating",{rating:6})).status,400);
+  await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:true});
+  assert.equal(await seasonWatched(),true);
+  assert.equal((await episodeApi(progressPath)).watched,1);
+  assert.equal((await episodeApi(progressPath)).complete,false);
+  assert.equal((await putSeason("me/ranking/"+seasonId,{tier:2})).status,400);
+  await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:false});
+  assert.equal(await seasonWatched(),false);
+  assert.equal((await putSeason(progressPath,{})).status,404);
+  await episodeApi("me/library/"+episodeId+"/watched","PUT",{value:true});
+  const otherEpisode="ep-demo-mare-alta-s1-e2";
+  await episodeApi("me/library/"+otherEpisode+"/watched","PUT",{value:true});
+  const secondDiary="diary?page=1&title="+otherEpisode;
+  assert.equal((await episodeApi(secondDiary)).items.length,1);
+  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:null,rewatched:false,complete:true});
+  const seriesProgressPath="me/series-progress/demo-mare-alta";
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  assert.equal((await putSeason(seasonLibrary+"rewatching",{value:true})).status,400);
+  const registerRewatch=async(id,expected=200)=>{
+    const result=await fetch(web+"/api/v1/me/viewings",{method:"POST",
+      headers:{...finalHeaders,"Idempotency-Key":randomUUID()},body:JSON.stringify({title:id,rewatch:true,date:"2024-01-01"})});
+    assert.equal(result.status,expected);
+    return result.json();
+  };
+  await registerRewatch(seasonId,409);
+  await episodeApi("me/library/"+episodeId+"/rating","PUT",{rating:5});
+  assert.equal((await episodeApi(progressPath)).complete,true);
+  await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:6});
+  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5,rewatched:false,complete:true});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  await episodeApi("me/library/"+episodeId+"/rewatching","PUT",{value:true});
+  await registerRewatch(episodeId);
+  assert.equal((await episodeApi(progressPath)).rewatched,false);
+  await episodeApi("me/library/"+otherEpisode+"/rewatching","PUT",{value:true});
+  const secondRewatch=await registerRewatch(otherEpisode);
+  assert.equal((await episodeApi(progressPath)).rewatched,true);
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  await registerRewatch(seasonId);
+  const episodeTwo="ep-demo-mare-alta-s2-e1";
+  await episodeApi("me/library/"+episodeTwo+"/watched","PUT",{value:true});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
+  await episodeApi("me/library/"+episodeTwo+"/rating","PUT",{rating:8});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
+  const deletion=await fetch(web+"/api/v1/me/viewings/"+secondRewatch.id,{method:"DELETE",headers:finalHeaders});
+  assert.equal(deletion.status,200);
+  assert.deepEqual(await episodeApi(progressPath),{watched:2,total:2,average:2.5,rewatched:false,complete:true});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
+  await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:null});
+  assert.equal((await episodeApi(progressPath)).complete,true);
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
+  await episodeApi("me/library/"+otherEpisode+"/rating","PUT",{rating:6});
+  await episodeApi("me/library/"+otherEpisode+"/watched","PUT",{value:false});
+  assert.equal((await episodeApi(progressPath)).complete,false);
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:false});
+  await episodeApi("me/library/"+otherEpisode+"/watched","PUT",{value:true});
+  assert.deepEqual(await episodeApi(seriesProgressPath),{complete:true});
+  assert.equal((await episodeApi("titles/"+seasonId+"/community")).average,3.5);
+  await episodeApi(seasonLibrary+"review","PUT",{review:"Resenha da temporada.",version:0,spoiler:false});
+  assert.equal((await episodeApi("titles/"+seasonId+"/community")).reviews[0].review,"Resenha da temporada.");
+  assert.equal((await episodeApi("titles/"+episodeId)).format,"ep");
+  const episodeLibrary="me/library/"+episodeId+"/";
+  await episodeApi(episodeLibrary+"watched","PUT",{value:true});
+  await episodeApi(episodeLibrary+"rating","PUT",{rating:9});
+  await episodeApi(episodeLibrary+"visibility","PUT",{value:true});
+  await episodeApi(episodeLibrary+"review","PUT",{review:"Resenha do episódio.",version:0,spoiler:true});
+  const episodeCommunity=await episodeApi("titles/"+episodeId+"/community");
+  assert.equal(episodeCommunity.rating_count,2);
+  assert.equal(episodeCommunity.average,4.75);
+  assert.equal(episodeCommunity.reviews[0].spoiler,true);
+  assert((await episodeApi("diary?page=1&title="+episodeId)).items.length);
+  assert((await episodeApi("me/ranking/"+episodeId,"PUT",{tier:2})).items.some(item=>item.title===episodeId&&item.tier===2));
+  await episodeApi("me/library/"+animeEpisodeId+"/watched","PUT",{value:true});
+  assert((await episodeApi("me/ranking/"+animeEpisodeId,"PUT",{tier:2})).items.some(item=>item.title===animeEpisodeId&&item.tier===2));
+  console.log("Episódio: página autenticada, avaliação, resenha com spoiler, Diário e ranking verificados.");
 
   const roomResponse=await fetch(web+"/api/v1/rooms",{method:"POST",headers:finalHeaders,body:JSON.stringify({name:"Segunda rodada teste"})});assert.equal(roomResponse.status,200);
   const reconsiderRoom=(await roomResponse.json()).id;
@@ -526,6 +730,39 @@ try {
     assert.equal((await fetch(web+"/api/v1/rooms/"+reconsiderRoom+"/reconsider/demo-fim-da-linha",{method:"PUT",headers:finalHeaders,body:JSON.stringify({liked:true})})).status,200);
     const agreed=await fetch(web+"/api/v1/rooms/"+reconsiderRoom,{headers:finalHeaders});assert((await agreed.json()).matches.includes("demo-fim-da-linha"));
   }
+  const reviewAuthor="demo_spoiler_author", authorName="critico";
+  await profile(reviewAuthor,authorName,{});
+  const reviewUrl="/me/library/"+title+"/review";
+  const reviewBody={version:0,review:"Resenha da votação de teste",spoiler:false};
+  const published=await request(social,reviewUrl,{user:reviewAuthor,method:"PUT",body:reviewBody});
+  const ballot=(user,containsSpoiler,expected=200)=>request(social,"/titles/"+title+"/spoiler-vote",
+    {method:"PUT",user,expected,body:{username:authorName,version:published.version,containsSpoiler}});
+  await ballot(reviewAuthor,true,403);
+  const reportPath="/titles/"+title+"/review-report";
+  const reportBody={username:authorName,version:published.version,reason:"spam",details:""};
+  await request(social,reportPath,{method:"POST",user:reviewAuthor,body:reportBody,expected:403});
+  await request(social,reportPath,{method:"POST",body:{...reportBody,reason:"other"},expected:400});
+  const report=await fetch(web+"/api/v1"+reportPath,{method:"POST",headers:finalHeaders,body:JSON.stringify(reportBody)});
+  assert.equal(report.status,200);
+  assert.deepEqual(await report.json(),{reported:true});
+  assert.deepEqual(await request(social,reportPath,{method:"POST",user:"demo_second_user",body:reportBody}),{reported:true});
+  assert.deepEqual(await request(social,reportPath,{method:"POST",user:"demo_second_user",body:reportBody}),{reported:true});
+  assert.equal((await fetch(web+"/api/v1/feedback/review-reports",{headers:finalHeaders})).status,403);
+  assert.equal((await ballot(actor,true)).spoiler,false);
+  assert.equal((await ballot(actor,true)).spoiler,false);
+  assert.equal((await ballot("demo_second_user",true)).spoiler,true);
+  const visitorPage=()=>request(social,"/library-page?section=watched&page=1&username="+authorName,{user:actor});
+  const classified=(await visitorPage()).items.find(i=>i.title===title);
+  assert.equal(classified.spoiler,true);assert.equal(classified.my_vote,true);
+  assert.equal(classified.viewer_watched,(await request(social,"/me")).library.find(i=>i.title===title).watched);
+  assert.equal((await ballot("demo_second_user",false)).spoiler,false);
+  await request(social,reviewUrl,{user:reviewAuthor,method:"PUT",body:{version:published.version,review:"Texto atualizado",spoiler:false}});
+  await ballot(actor,true,409);
+  await request(social,reportPath,{method:"POST",body:reportBody,expected:409});
+  const revised=(await request(social,communityPath)).reviews.find(r=>r.username===authorName);
+  assert.equal(revised.my_vote,null);assert.equal(revised.spoiler,false);
+  await request(social,"/me/library/"+title+"/visibility",{user:reviewAuthor,method:"PUT",body:{value:false}});
+  await ballot(actor,true,404);
   console.log("Segunda rodada: maioria e identificação dos apoiadores verificadas pela API autenticada.");
   console.log("Página individual e ranking por usuário com persistência e controle de versão verificados.");
   console.log("Cadastro por e-mail, perfil sem CPF e com foto, link de uso único e recuperação verificados.");

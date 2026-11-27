@@ -2,7 +2,7 @@
 
 Diário audiovisual em português para descobrir, registrar e avaliar filmes, séries e animes. Anime é uma categoria compartilhada por filmes e séries. Projeto em versão alpha, com frontend Next.js e serviços Java independentes.
 
-A aplicação inclui busca, filtros, perfil, **Vou ver**, notas de meia a cinco estrelas, resenhas, diário, listas, ranking, amizades, importação do Letterboxd e salas para escolher filmes em grupo. O catálogo fictício funciona sem credenciais externas.
+A aplicação inclui busca, filtros, perfil, **Vou ver**, notas de meia a cinco estrelas, resenhas, diário, ranking, amizades, importação do Letterboxd e salas para escolher filmes em grupo. O catálogo fictício funciona sem credenciais externas.
 
 Cada obra tem uma página própria. No perfil, “Vou ver” e “Já vistos e avaliações” exibem cards. O ranking pessoal separa filmes, séries e animes e permite organizar até 100 obras assistidas entre cinco categorias: Obra-prima, Muito bom, Bom, Regular e Não gostei. As posições são salvas automaticamente. No celular, seletores e setas permitem mover e reordenar os cards; em caso de falha, **Salvar ranking** repete a tentativa sem descartar a organização local.
 
@@ -12,7 +12,7 @@ Marcar **Já vi** registra a primeira sessão no **Diário**, remove a obra do *
 
 ## Executar localmente
 
-Requisitos: Java 21, Maven e Node.js 24. Na raiz deste projeto:
+Requisitos: Java 21, Maven e Node.js 24. Na raiz deste projeto, `sdk env` (usa `.sdkmanrc`) e `nvm use` (usa `.nvmrc`) selecionam as versões certas:
 
 ```shell
 mvn -B package
@@ -59,18 +59,18 @@ flowchart LR
     Social --> SocialDB[(Banco social)]
 ```
 
-O BFF verifica a sessão e autoriza os caminhos de API expostos ao navegador. Os serviços recebem a identidade derivada da sessão pelo canal interno autenticado. Cada serviço tem credencial e migrações próprias. O catálogo usa identificadores estáveis com o tipo de mídia do provedor. O social é responsável pela propriedade dos registros e aplica as mudanças de biblioteca e avaliações em transações locais. Criações de listas e sessões aceitam `Idempotency-Key` e reusam o resultado para a mesma requisição por 24 horas.
+O BFF verifica a sessão e autoriza os caminhos de API expostos ao navegador. Os serviços recebem a identidade derivada da sessão pelo canal interno autenticado. Cada serviço tem credencial e migrações próprias. O catálogo usa identificadores estáveis com o tipo de mídia do provedor. O social é responsável pela propriedade dos registros e aplica as mudanças de biblioteca e avaliações em transações locais. Criações de sessões aceitam `Idempotency-Key` e reusam o resultado para a mesma requisição por 24 horas.
 
 ## Verificação
 
-Com os builds prontos, execute `node scripts/smoke.mjs`. O teste sobe servidores temporários em loopback e, por padrão, bancos H2 em memória. Ele verifica autenticação interna, busca, categorias, regras de nota e interesse, conflito de edição, idempotência, propriedade de registros, ordem de listas, sessão web e proteção de origem. O workflow do GitHub executa os mesmos builds e testes.
+Com os builds prontos, execute `node scripts/smoke.mjs`. O teste sobe servidores temporários em loopback e, por padrão, bancos H2 em memória. Ele verifica autenticação interna, busca, categorias, regras de nota e interesse, conflito de edição, idempotência, propriedade de registros, sessão web e proteção de origem. O workflow do GitHub executa os mesmos builds e testes.
 
 O mesmo teste passou com PostgreSQL 16 em bancos descartáveis. Para repetir, forneça dois bancos vazios com `SMOKE_CATALOG_JDBC` e `SMOKE_SOCIAL_JDBC`, além de `SMOKE_DB_USER` e `SMOKE_DB_PASSWORD`. O teste cria registros, então use apenas bancos de teste.
 
 ## Comunidade e escolha em grupo
 
 - **Amigos:** busca, pedido, aceite, recusa e cancelamento. O perfil visitado mostra o estado da amizade e uma lista paginada de amigos, com foto, nome e acesso aos respectivos perfis. Apenas amizades aceitas e perfis ativos aparecem; pedidos pendentes permanecem privados.
-- **Privacidade do perfil:** visibilidade independente de **Vou ver**, **Meu ranking**, **Já vistos e avaliações**, **Diário** e **Listas**, filtrada também na API. As avaliações das obras têm controle separado.
+- **Privacidade do perfil:** visibilidade independente de **Vou ver**, **Meu ranking**, **Já vistos e avaliações** e **Diário**, filtrada também na API. As avaliações das obras têm controle separado.
 - **Salas:** de 2 a 8 participantes, filmes do Vou ver e sugestões do catálogo, seleção de vários gêneros, votos persistidos e escolha por unanimidade. A maioria pode abrir uma reconsideração para quem passou. Convites internos ficam em Minhas salas e exigem confirmação de entrada. [Regras das salas](deploy/MOVIE_ROOMS.md).
 - **Importação:** ZIP do Letterboxd com revisão de correspondências antes de importar. Repetições não duplicam registros nem sobrescrevem avaliações existentes. [Limites e funcionamento](deploy/LETTERBOXD_IMPORT.md).
 - **Feedback:** envio privado de sugestões e problemas, com painel restrito à administração.

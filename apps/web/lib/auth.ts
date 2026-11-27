@@ -1,83 +1,113 @@
-import {createHash} from "node:crypto";
-import type {NextAuthOptions} from "next-auth";
-import {encode,type JWTEncodeParams} from "next-auth/jwt";
+import { createHash } from "node:crypto";
+import type { NextAuthOptions } from "next-auth";
+import { encode, type JWTEncodeParams } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import Keycloak from "next-auth/providers/keycloak";
-import {accountRequest} from "./accounts";
+import { accountRequest } from "./accounts";
 
 const issuer = process.env.OIDC_ISSUER;
 const sessionAge = 8 * 60 * 60;
 const rememberedSessionAge = 30 * 24 * 60 * 60;
 export const emailAccounts = !issuer && process.env.EMAIL_ACCOUNTS === "true";
 function invited(subject: string) {
-  return (process.env.INVITED_SUBJECTS ?? "").split(",").map(item => item.trim()).includes(subject);
+  return (process.env.INVITED_SUBJECTS ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .includes(subject);
 }
 
 export function encodeSession(params: JWTEncodeParams) {
   const deadline = params.token?.loginExpiresAt;
-  return encode(typeof deadline === "number"
-    ? {...params, maxAge: deadline - Math.floor(Date.now() / 1000)}
-    : params);
+  return encode(
+    typeof deadline === "number" ? { ...params, maxAge: deadline - Math.floor(Date.now() / 1000) } : params,
+  );
 }
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
-  session: {strategy:"jwt", maxAge: sessionAge},
-  jwt: {encode: encodeSession},
-  providers: issuer ? [Keycloak({
-    issuer, clientId:process.env.OIDC_CLIENT_ID!, clientSecret:process.env.OIDC_CLIENT_SECRET!,
-    checks:["pkce","state"],
-  })] : emailAccounts ? [Credentials({
-    id:"email-account",name:"Conta por e-mail",
-    credentials:{email:{},password:{},token:{},purpose:{},rememberMe:{}},
-    async authorize(input) {
-      if(!input)return null;
-      const {email,password,token,purpose}=input;
-      const endpoint=(purpose==="register"||purpose==="reset") ? purpose+"/confirm" : "login";
-      const response=await accountRequest(endpoint,{method:"POST",body:JSON.stringify({email,password,token})});
-      if(!response.ok) {
-        if(response.status===401)return null;
-        const error=await response.json().catch(()=>null);
-        throw new Error(response.status<500&&error?.message ? error.message : "Serviço de contas indisponível.");
-      }
-      const user = await response.json() as {id:string;email:string;version:number};
-      return {...user, rememberMe:endpoint==="login" && input.rememberMe==="true"};
-    },
-  })] : [],
+  session: { strategy: "jwt", maxAge: sessionAge },
+  jwt: { encode: encodeSession },
+  providers: issuer
+    ? [
+        Keycloak({
+          issuer,
+          clientId: process.env.OIDC_CLIENT_ID!,
+          clientSecret: process.env.OIDC_CLIENT_SECRET!,
+          checks: ["pkce", "state"],
+        }),
+      ]
+    : emailAccounts
+      ? [
+          Credentials({
+            id: "email-account",
+            name: "Conta por e-mail",
+            credentials: { email: {}, password: {}, token: {}, purpose: {}, rememberMe: {} },
+            async authorize(input) {
+              if (!input) return null;
+              const { email, password, token, purpose } = input;
+              const endpoint = purpose === "register" || purpose === "reset" ? purpose + "/confirm" : "login";
+              const response = await accountRequest(endpoint, {
+                method: "POST",
+                body: JSON.stringify({ email, password, token }),
+              });
+              if (!response.ok) {
+                if (response.status === 401) return null;
+                const error = await response.json().catch(() => null);
+                throw new Error(
+                  response.status < 500 && error?.message ? error.message : "Serviço de contas indisponível.",
+                );
+              }
+              const user = (await response.json()) as { id: string; email: string; version: number };
+              return { ...user, rememberMe: endpoint === "login" && input.rememberMe === "true" };
+            },
+          }),
+        ]
+      : [],
   callbacks: {
-    async signIn({account, profile}) {
-      if(account?.provider==="email-account") return emailAccounts;
-      return Boolean(issuer && account?.provider==="keycloak" && invited(account.providerAccountId)
-        && (profile as {email_verified?:boolean} | undefined)?.email_verified===true);
+    async signIn({ account, profile }) {
+      if (account?.provider === "email-account") return emailAccounts;
+      return Boolean(
+        issuer &&
+        account?.provider === "keycloak" &&
+        invited(account.providerAccountId) &&
+        (profile as { email_verified?: boolean } | undefined)?.email_verified === true,
+      );
     },
-    async jwt({token, account, user}) {
-      if(account?.provider==="keycloak") {
-        token.actor = createHash("sha256").update(issuer + "\u0000" + account.providerAccountId).digest("hex");
+    async jwt({ token, account, user }) {
+      if (account?.provider === "keycloak") {
+        token.actor = createHash("sha256")
+          .update(issuer + "\u0000" + account.providerAccountId)
+          .digest("hex");
         token.subject = account.providerAccountId;
-      } else if(account?.provider==="email-account") {
-        const accountUser = user as {version?:number;rememberMe?:boolean};
-        token.actor=user.id;
-        token.accountVersion=accountUser.version;
-        token.rememberMe=accountUser.rememberMe===true;
-        token.loginExpiresAt=Math.floor(Date.now()/1000)+(token.rememberMe?rememberedSessionAge:sessionAge);
+      } else if (account?.provider === "email-account") {
+        const accountUser = user as { version?: number; rememberMe?: boolean };
+        token.actor = user.id;
+        token.accountVersion = accountUser.version;
+        token.rememberMe = accountUser.rememberMe === true;
+        token.loginExpiresAt = Math.floor(Date.now() / 1000) + (token.rememberMe ? rememberedSessionAge : sessionAge);
       }
-      if(typeof token.subject==="string" && !invited(token.subject)) delete token.actor;
-      if(typeof token.actor==="string" && token.actor.startsWith("demo_")) delete token.actor;
+      if (typeof token.subject === "string" && !invited(token.subject)) delete token.actor;
+      if (typeof token.actor === "string" && token.actor.startsWith("demo_")) delete token.actor;
       return token;
     },
-    async session({session,token}) {
-      if(typeof token.loginExpiresAt==="number") {
-        session.expires=new Date(token.loginExpiresAt*1000).toISOString();
-        if(Date.now()>=token.loginExpiresAt*1000)return {...session,actor:null};
+    async session({ session, token }) {
+      if (typeof token.loginExpiresAt === "number") {
+        session.expires = new Date(token.loginExpiresAt * 1000).toISOString();
+        if (Date.now() >= token.loginExpiresAt * 1000) return { ...session, actor: null };
       }
-      let actor=typeof token.actor==="string"?token.actor:null;
-      if(actor?.startsWith("account_")) {
-        const valid=emailAccounts && typeof token.accountVersion==="number" &&
-          await accountRequest("session?version="+token.accountVersion,{headers:{"X-Actor":actor}}).then(r=>r.ok,()=>false);
-        if(!valid)actor=null;
+      let actor = typeof token.actor === "string" ? token.actor : null;
+      if (actor?.startsWith("account_")) {
+        const valid =
+          emailAccounts &&
+          typeof token.accountVersion === "number" &&
+          (await accountRequest("session?version=" + token.accountVersion, { headers: { "X-Actor": actor } }).then(
+            (r) => r.ok,
+            () => false,
+          ));
+        if (!valid) actor = null;
       }
-      return {...session,actor};
+      return { ...session, actor };
     },
   },
-  pages:{signIn:"/"},
+  pages: { signIn: "/" },
 };

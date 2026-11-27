@@ -23,7 +23,7 @@ class EmailAccountsTest {
 
     @BeforeEach void setup() {
         var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V2__email_accounts.sql"),new ClassPathResource("db/migration/V20__account_state.sql")).execute(source);
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V2__email_accounts.sql"),new ClassPathResource("db/migration/V20__account_state.sql"),new ClassPathResource("db/migration/V22__reuse_deleted_account_email.sql")).execute(source);
         db=new JdbcTemplate(source);
         mail=mock(JavaMailSender.class);
     }
@@ -31,7 +31,7 @@ class EmailAccountsTest {
     private EmailAccounts service(boolean restricted,String invitations) {
         var factory=new StaticListableBeanFactory();
         factory.addBean("mail",mail);
-        return new EmailAccounts(db,factory.getBeanProvider(JavaMailSender.class),UUID.randomUUID().toString(),
+        return new EmailAccounts(db,factory.getBeanProvider(JavaMailSender.class),
             "smtp","https://example.test","sender@example.test",restricted,invitations);
     }
     private String link(EmailAccounts accounts,String purpose,String email) {
@@ -169,6 +169,19 @@ class EmailAccountsTest {
         assertThrows(ResponseStatusException.class,()->service.login(new EmailAccounts.Input(address,password,null)));
         assertThrows(ResponseStatusException.class,()->service.confirm("reset",confirmation(reset)));
         assertThrows(ResponseStatusException.class,()->service.manage(actor,new EmailAccounts.AccountChange("resume",password)));
-        clearInvocations(mail);service.request("reset",new EmailAccounts.Input(address,null,null));service.request("register",new EmailAccounts.Input(address,null,null));verifyNoInteractions(mail);
+        clearInvocations(mail);
+        service.request("reset",new EmailAccounts.Input(address,null,null));
+        verifyNoInteractions(mail);
+        var replacementPassword=UUID.randomUUID()+"Aa1!";
+        var fresh=service.confirm("register",new EmailAccounts.Input(null,replacementPassword,link(service,"register",address)));
+        assertNotEquals(actor,fresh.id());
+        assertEquals(fresh.id(),service.login(new EmailAccounts.Input(address,replacementPassword,null)).id());
+        assertThrows(ResponseStatusException.class,()->service.login(new EmailAccounts.Input(address,password,null)));
+        assertThrows(ResponseStatusException.class,()->service.session(actor,login.version()));
+        assertThrows(ResponseStatusException.class,()->service.confirm("reset",confirmation(reset)));
+        assertEquals(0,db.queryForObject("select count(*) from library where actor=?",Integer.class,fresh.id()));
+        assertEquals(0,db.queryForObject("select count(*) from profile where actor=?",Integer.class,fresh.id()));
+        assertEquals(1,db.queryForObject("select count(*) from library where actor=?",Integer.class,actor));
+        assertEquals(fresh.id(),service.confirm("reset",confirmation(link(service,"reset",address))).id());
     }
 }

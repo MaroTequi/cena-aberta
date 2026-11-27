@@ -18,8 +18,19 @@ jobs:
       - run: mvn -B package
       - run: npm ci
         working-directory: apps/web
+      - run: npm run lint
+        working-directory: apps/web
+      - run: npm run format:check
+        working-directory: apps/web
+      - run: npx next typegen
+        working-directory: apps/web
+      - run: npm run check
+        working-directory: apps/web
+      - run: npm test
+        working-directory: apps/web
       - run: npm run build
         working-directory: apps/web
+      - run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-routes.mjs
       - run: node scripts/smoke.mjs
 
   arm-deployment:

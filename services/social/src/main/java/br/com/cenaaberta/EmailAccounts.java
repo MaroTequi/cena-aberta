@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import jakarta.mail.internet.InternetAddress;
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +32,6 @@ class EmailAccounts {
     private final BCryptPasswordEncoder encoder=new BCryptPasswordEncoder(12);
     private final SecureRandom random=new SecureRandom();
     private final String dummy=encoder.encode(UUID.randomUUID().toString());
-    private final byte[] secret;
     private final String mode, front, from;
     private final boolean inviteOnly;
     private final Set<String> invitedEmails;
@@ -41,10 +39,10 @@ class EmailAccounts {
     private int requests;
 
     EmailAccounts(JdbcTemplate db,ObjectProvider<JavaMailSender> mail,
-        @Value("${internal.secret}") String secret,@Value("${EMAIL_MODE:disabled}") String mode,
+        @Value("${EMAIL_MODE:disabled}") String mode,
         @Value("${FRONTEND_URL:http://localhost:3000}") String front,@Value("${MAIL_FROM:}") String from,
         @Value("${INVITE_ONLY:false}") boolean inviteOnly,@Value("${INVITED_EMAILS:}") String invitedEmails) {
-        this.db=db; this.mail=mail.getIfAvailable(); this.secret=secret.getBytes(StandardCharsets.UTF_8);
+        this.db=db; this.mail=mail.getIfAvailable();
         this.mode=mode; this.front=front.replaceAll("/$",""); this.from=from;
         this.inviteOnly=inviteOnly;
         var invitations=new HashSet<String>();
@@ -65,13 +63,6 @@ class EmailAccounts {
         }
     }
 
-    @ModelAttribute
-    void guard(HttpServletRequest request) {
-        String key=request.getHeader("X-Internal-Key");
-        if(key==null || !MessageDigest.isEqual(secret,key.getBytes(StandardCharsets.UTF_8)))
-            throw error(HttpStatus.UNAUTHORIZED,"Acesso interno necessário.");
-    }
-
     @PostMapping("/{purpose:register|reset}")
     @ResponseStatus(HttpStatus.ACCEPTED)
     void request(@PathVariable String purpose,@RequestBody Input input) {
@@ -79,20 +70,20 @@ class EmailAccounts {
         limit();
         String email=email(input.email());
         if(purpose.equals("register") && !canRegister(email)) return;
-        boolean exists=account(email).isPresent();
-        if(exists && "deleted".equals(db.queryForObject("select state from email_account where email=?",String.class,email)))return;
-        if(purpose.equals("reset")&&!exists)return;
-        if(purpose.equals("register")&&exists)return;
+        var existing=account(email);
+        boolean reset=purpose.equals("reset");
+        if(reset!=existing.isPresent())return;
+        String resetActor=existing.map(Login::id).orElse(null);
         var now=OffsetDateTime.now(ZoneOffset.UTC);
         byte[] bytes=new byte[32]; random.nextBytes(bytes);
         String token=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         String hash=hash(token);
-        int changed=db.update("update email_link set token_hash=?,sent_at=?,expires_at=? where email=? and purpose=? and sent_at<=?",
-            hash,now,now.plusMinutes(60),email,purpose,now.minusMinutes(purpose.equals("reset")?2:1));
+        int changed=db.update("update email_link set reset_actor=?,token_hash=?,sent_at=?,expires_at=? where email=? and purpose=? and sent_at<=?",
+            resetActor,hash,now,now.plusMinutes(60),email,purpose,now.minusMinutes(purpose.equals("reset")?2:1));
         if(changed==0) {
             try {
-                db.update("insert into email_link(email,purpose,token_hash,sent_at,expires_at) values(?,?,?,?,?)",
-                    email,purpose,hash,now,now.plusMinutes(60));
+                db.update("insert into email_link(email,purpose,token_hash,sent_at,expires_at,reset_actor) values(?,?,?,?,?,?)",
+                    email,purpose,hash,now,now.plusMinutes(60),resetActor);
             } catch(DuplicateKeyException cooldown) {
                 if(purpose.equals("reset")) {
                     var sent=db.queryForObject("select sent_at from email_link where email=? and purpose=?",(row,index)->row.getTimestamp(1).toInstant(),email,purpose);
@@ -122,21 +113,23 @@ class EmailAccounts {
         String token=input.token();
         if(token==null || !token.matches("[A-Za-z0-9_-]{43}")) throw invalid();
         String tokenHash=hash(token);
-        var candidate=db.queryForList("select email from email_link where token_hash=? and purpose=? and expires_at>CURRENT_TIMESTAMP",tokenHash,purpose);
+        var candidate=db.queryForList("select email,reset_actor from email_link where token_hash=? and purpose=? and expires_at>CURRENT_TIMESTAMP",tokenHash,purpose);
         if(candidate.isEmpty()) throw invalid();
         String password=input.password();
         if(password==null || password.codePointCount(0,password.length())<12 || password.getBytes(StandardCharsets.UTF_8).length>72 || !password.codePoints().anyMatch(Character::isUpperCase) || !password.codePoints().anyMatch(Character::isLowerCase) || !password.codePoints().anyMatch(Character::isDigit) || !password.codePoints().anyMatch(c -> !Character.isLetterOrDigit(c) && !Character.isWhitespace(c)))
             throw error(HttpStatus.BAD_REQUEST,"Use pelo menos 12 caracteres, com maiúscula, minúscula, número e símbolo (máximo de 72 bytes).");
         String encoded=encoder.encode(password);
+        String resetActor=(String)candidate.getFirst().get("reset_actor");
+        if(purpose.equals("reset") && db.queryForList("select actor from email_account where actor=? and email=? and state<>'deleted' for update",
+                resetActor,candidate.getFirst().get("email")).isEmpty())throw invalid();
         var rows=db.queryForList("select email from email_link where token_hash=? and purpose=? and expires_at>CURRENT_TIMESTAMP for update",tokenHash,purpose);
         if(rows.isEmpty()) throw invalid();
         String email=(String)rows.getFirst().get("email");
-        if(db.queryForObject("select count(*) from email_account where email=? and state='deleted'",Integer.class,email)>0)throw invalid();
         if(purpose.equals("register")) {
             if(!canRegister(email)) throw invalid();
             try { db.update("insert into email_account(actor,email,password_hash) values(?,?,?)","account_"+UUID.randomUUID().toString().replace("-",""),email,encoded); }
             catch(DuplicateKeyException duplicate) { throw invalid(); }
-        } else if(db.update("update email_account set password_hash=?,session_version=session_version+1 where email=?",encoded,email)!=1) throw invalid();
+        } else if(db.update("update email_account set password_hash=?,session_version=session_version+1 where actor=? and email=?",encoded,resetActor,email)!=1) throw invalid();
         db.update("delete from email_link where token_hash=?",tokenHash);
         return account(email).orElseThrow(EmailAccounts::invalid);
     }
@@ -181,9 +174,14 @@ class EmailAccounts {
         if(input.action().equals("resume")&&!previous.equals("paused"))throw error(HttpStatus.CONFLICT,"A conta não está pausada.");
         var profiles=db.queryForList("select active from profile where actor=? for update",Boolean.class,actor);
         if(input.action().equals("pause")&&(profiles.isEmpty()||!profiles.getFirst()))throw error(HttpStatus.CONFLICT,"Conta indisponível para pausa.");
-        db.update("update email_account set state=?,state_changed_at=CURRENT_TIMESTAMP,session_version=session_version+1 where actor=?",next,actor);
+        if(next.equals("deleted")) {
+            db.update("update email_account set archived_email=email,email=null,state='deleted',state_changed_at=CURRENT_TIMESTAMP,session_version=session_version+1 where actor=?",actor);
+            db.update("delete from email_link where email=?",row.get("email"));
+        } else {
+            db.update("update email_link set expires_at=CURRENT_TIMESTAMP where email=?",row.get("email"));
+            db.update("update email_account set state=?,state_changed_at=CURRENT_TIMESTAMP,session_version=session_version+1 where actor=?",next,actor);
+        }
         db.update("update profile set active=? where actor=?",next.equals("active"),actor);
-        db.update("update email_link set expires_at=CURRENT_TIMESTAMP where email=?",row.get("email"));
         return Map.of("state",next);
     }
 

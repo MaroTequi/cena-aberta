@@ -7,6 +7,23 @@ x-runtime: &runtime
       max-size: "10m"
       max-file: "3"
 services:
+  backup:
+    <<: *runtime
+    build:
+      context: ./deploy
+      dockerfile: backup.Dockerfile
+    volumes:
+      - admin-backups:/archive
+    environment:
+      INTERNAL_SECRET: ${SOCIAL_INTERNAL_SECRET:?}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?}
+      SOCIAL_DB_PASSWORD: ${SOCIAL_DB_PASSWORD:?}
+      SMTP_HOST: ${SMTP_HOST:?}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:?}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?}
+      MAIL_FROM: ${MAIL_FROM:?}
+      ALPHA_URL: ${ALPHA_URL:?}
   catalog-db:
     <<: *runtime
   social-db:
@@ -45,3 +62,6 @@ services:
       OIDC_CLIENT_ID: ""
       OIDC_CLIENT_SECRET: ""
       INVITED_SUBJECTS: ""
+
+volumes:
+  admin-backups:

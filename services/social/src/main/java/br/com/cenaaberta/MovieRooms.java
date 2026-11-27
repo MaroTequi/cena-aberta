@@ -2,8 +2,6 @@ package br.com.cenaaberta;
 
 import java.net.URI;
 import java.net.http.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.*;
 import java.util.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +19,8 @@ public class MovieRooms {
     record Create(String name) {}
     record Vote(Boolean liked) {}
     record Invitation(String username) {}
-    record Settings(Integer genre,List<Integer> genres) {
+    record Settings(Integer genre,List<Integer> genres,String type) {
+        Settings(Integer genre,List<Integer> genres){this(genre,genres,null);}
         Settings(Integer genre){this(genre,null);}
     }
     private static final Set<Integer> GENRES=Set.of(28,12,16,35,80,99,18,10751,14,36,27,10402,9648,10749,878,10770,53,10752,37);
@@ -31,16 +30,13 @@ public class MovieRooms {
     }
     private final JdbcTemplate db;
     private final ObjectMapper mapper;
-    private final String secret,catalogKey,catalog;
+    private final String catalogKey,catalog;
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
-    MovieRooms(JdbcTemplate db,ObjectMapper mapper,@Value("${internal.secret}") String secret,
-        @Value("${CATALOG_INTERNAL_SECRET}") String catalogKey,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog) {
-        this.db=db;this.mapper=mapper;this.secret=secret;this.catalogKey=catalogKey;this.catalog=catalog;
+    MovieRooms(JdbcTemplate db,ObjectMapper mapper,@Value("${CATALOG_INTERNAL_SECRET}") String catalogKey,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog) {
+        this.db=db;this.mapper=mapper;this.catalogKey=catalogKey;this.catalog=catalog;
     }
     @ModelAttribute
     void verify(HttpServletRequest request) {
-        String key=request.getHeader("X-Internal-Key");
-        if(key==null||!MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),key.getBytes(StandardCharsets.UTF_8)))fail(HttpStatus.UNAUTHORIZED,"Acesso interno necessário.");
         active(request.getHeader("X-Actor"));
     }
     private void active(String actor) {
@@ -87,8 +83,33 @@ public class MovieRooms {
     @DeleteMapping("/{id}") @Transactional
     Map<String,Boolean> delete(@RequestHeader("X-Actor") String actor,@PathVariable String id){
         var r=room(id,true);owner(r,actor);
-        db.update("delete from movie_room where id=?",id);
+        dissolve(id,"closedByHost");
         return Map.of("deleted",true);
+    }
+    private void dissolve(String id,String reason){
+        db.update("update room_end_notice set reason=?,visible_at=CURRENT_TIMESTAMP where room=?",reason,id);
+        db.update("delete from movie_room where id=?",id);
+    }
+
+    @PostMapping("/{id}/leave") @Transactional
+    Map<String,Boolean> leave(@RequestHeader("X-Actor") String actor,@PathVariable String id){
+        var r=room(id,true);
+        requireMember(id,actor);
+        if(actor.equals(r.get("owner")))fail(HttpStatus.FORBIDDEN,"O anfitrião pode excluir a sala.");
+        int members=db.queryForObject("select count(*) from movie_room_member where room=?",Integer.class,id);
+        if(members==2 && "voting".equals(r.get("status"))){
+            dissolve(id,"closedByLeave");
+            return Map.of("dissolved",true);
+        }
+        db.update("delete from movie_room_invitation where room=? and recipient=?",id,actor);
+        db.update("delete from movie_room_member where room=? and actor=?",id,actor);
+        db.update("delete from room_end_notice where room=? and recipient=?",id,actor);
+        return Map.of("dissolved",false);
+    }
+
+    private void addMember(String id,String actor){
+        db.update("insert into movie_room_member(room,actor) values(?,?)",id,actor);
+        db.update("insert into room_end_notice(room,recipient,name,reason,visible_at) select id,?,name,'expired',expires from movie_room where id=?",actor,id);
     }
     @PostMapping
     @Transactional
@@ -100,7 +121,7 @@ public class MovieRooms {
         if(name.isEmpty()||name.length()>80)fail(HttpStatus.BAD_REQUEST,"Informe um nome de até 80 caracteres.");
         String id=UUID.randomUUID().toString();
         db.update("insert into movie_room(id,owner,name,expires) values(?,?,?,?)",id,actor,name,OffsetDateTime.now(ZoneOffset.UTC).plusDays(7));
-        db.update("insert into movie_room_member(room,actor) values(?,?)",id,actor);
+        addMember(id,actor);
         return Map.of("id",id);
     }
     @PostMapping("/{id}/join")
@@ -110,14 +131,17 @@ public class MovieRooms {
         if(member(id,actor))return Map.of("id",id);
         if(!r.get("status").equals("lobby"))fail(HttpStatus.CONFLICT,"A rodada já começou. Peça uma nova sala ao anfitrião.");
         if(db.queryForObject("select count(*) from movie_room_member where room=?",Integer.class,id)>=8)fail(HttpStatus.CONFLICT,"A sala já tem 8 participantes.");
-        db.update("insert into movie_room_member(room,actor) values(?,?)",id,actor);
+        addMember(id,actor);
         return Map.of("id",id);
     }
     @PutMapping("/{id}/settings") @Transactional
     Map<String,Object> settings(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody Settings input){
         var r=room(id,true);owner(r,actor);
-        if(!r.get("status").equals("lobby"))fail(HttpStatus.CONFLICT,"O gênero só pode mudar antes do início. Crie outra sala para trocar.");
+        if(!r.get("status").equals("lobby"))fail(HttpStatus.CONFLICT,"Os filtros só podem mudar antes do início. Crie outra sala para trocar.");
+        String type=input.type()==null?(String)r.get("media_type"):input.type();
+        if(!Set.of("movie","tv","anime","all").contains(type))fail(HttpStatus.BAD_REQUEST,"Tipo de obra inválido.");
         List<Integer> selected=input.genres();
+        if(selected==null && input.genre()==null && input.type()!=null)selected=genres(r);
         if(selected==null) {
             if(input.genre()==null)fail(HttpStatus.BAD_REQUEST,"Informe os gêneros.");
             selected=input.genre()==0?List.of():List.of(input.genre());
@@ -125,8 +149,8 @@ public class MovieRooms {
         if(selected.size()>GENRES.size()||selected.stream().anyMatch(g->g==null||!GENRES.contains(g)))fail(HttpStatus.BAD_REQUEST,"Gênero inválido.");
         selected=selected.stream().distinct().sorted().toList();
         int legacy=selected.isEmpty()?0:selected.getFirst();
-        db.update("update movie_room set genre=?,genres=? where id=?",legacy,selected.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),id);
-        return Map.of("genre",legacy,"genres",selected);
+        db.update("update movie_room set genre=?,genres=?,media_type=? where id=?",legacy,selected.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),type,id);
+        return Map.of("genre",legacy,"genres",selected,"type",type);
     }
     @PostMapping("/{id}/start")
     @Transactional
@@ -146,7 +170,7 @@ public class MovieRooms {
                 if(!group.matches("[a-z0-9,\\-]+"))throw new IllegalArgumentException();
                 var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/title-batch?ids="+group+"&genres="+Objects.toString(r.get("genres"),""))).header("X-Internal-Key",catalogKey).timeout(Duration.ofSeconds(25)).GET().build(),HttpResponse.BodyHandlers.ofString());
                 if(response.statusCode()!=200)throw new IllegalStateException();
-                for(var title:mapper.readTree(response.body()))if(title.path("format").asText().equals("movie")){
+                for(var title:mapper.readTree(response.body()))if(matchesType(title,(String)r.get("media_type"))){
                     Map<String,Object> film=new LinkedHashMap<>();
                     for(String field:List.of("id","name","year","summary","poster"))film.put(field,title.path(field).isNull()?null:title.path(field).asText());
                     if(ids.contains(film.get("id"))&&deck.stream().noneMatch(t->t.get("id").equals(film.get("id"))))deck.add(film);
@@ -164,6 +188,10 @@ public class MovieRooms {
         db.update("update movie_room set status='voting' where id=?",id);
         return Map.of("id",id);
     }
+    private boolean matchesType(com.fasterxml.jackson.databind.JsonNode title,String type){
+        String format=title.path("format").asText();
+        return Set.of("movie","tv").contains(format) && (type.equals("all") || type.equals(format) || (type.equals("anime") && title.path("anime").asBoolean()));
+    }
     private void addSuggestions(String id) {
         var excluded=db.queryForList("select title from movie_room_title where room=?",String.class,id);
         if(excluded.size()>=1000)fail(HttpStatus.CONFLICT,"Esta sala atingiu o limite de filmes. Crie outra sala.");
@@ -172,12 +200,13 @@ public class MovieRooms {
         var watched=db.queryForList("select distinct l.title from library l join movie_room_member m on m.actor=l.actor where m.room=? and l.watched=true limit 10000",String.class,id);
         var liked=db.queryForList("select title from movie_room_vote where room=? and liked=true group by title order by count(*) desc limit 40",String.class,id);
         try {
-            var payload=mapper.writeValueAsString(Map.of("exclude",excluded,"watched",watched,"liked",liked,"page",page,"genres",genres(room(id,false))));
+            var settings=room(id,false);
+            var payload=mapper.writeValueAsString(Map.of("exclude",excluded,"watched",watched,"liked",liked,"page",page,"genres",genres(settings),"type",settings.get("media_type")));
             var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/suggestions")).header("X-Internal-Key",catalogKey).header("Content-Type","application/json").timeout(Duration.ofSeconds(25)).POST(HttpRequest.BodyPublishers.ofString(payload)).build(),HttpResponse.BodyHandlers.ofString());
             if(response.statusCode()!=200)throw new IllegalStateException();
             var data=mapper.readTree(response.body());int position=excluded.size();
             var added=new HashSet<>(excluded);
-            for(var film:data.path("items"))if(film.path("format").asText().equals("movie")&&added.add(film.path("id").asText())){
+            for(var film:data.path("items"))if(matchesType(film,(String)settings.get("media_type"))&&added.add(film.path("id").asText())){
                 db.update("insert into movie_room_title(room,title,position,snapshot) values(?,?,?,?)",id,film.path("id").asText(),position++,film.toString());
             }
             db.update("update movie_room set suggestion_page=? where id=?",data.path("nextPage").asInt(page+2),id);
@@ -198,12 +227,22 @@ public class MovieRooms {
     @GetMapping("/{id}")
     @Transactional
     Map<String,Object> state(@RequestHeader("X-Actor") String actor,@PathVariable String id){
-        var r=room(id,true);requireMember(id,actor);
+        Map<String,Object> r;
+        try{r=room(id,true);}catch(ResponseStatusException e){
+            var reasons=db.queryForList("select reason from room_end_notice where room=? and recipient=? and visible_at<=CURRENT_TIMESTAMP",String.class,id,actor);
+            if(!reasons.isEmpty())fail(HttpStatus.GONE,switch(reasons.getFirst()){
+                case "closedByLeave" -> "A sala foi desfeita porque restaria apenas um participante.";
+                case "closedByHost" -> "O anfitrião desfez a sala.";
+                default -> "Esta sala expirou.";
+            });
+            throw e;
+        }
+        requireMember(id,actor);
         var result=new LinkedHashMap<String,Object>();
         result.put("id",id);result.put("name",r.get("name"));result.put("status",r.get("status"));result.put("isOwner",actor.equals(r.get("owner")));result.put("chosen",r.get("chosen"));
         var members=db.queryForList("select case when p.active then p.username else '' end as username,case when p.active then p.name else 'Conta indisponível' end as name,case when p.active then p.avatar else '' end as avatar,p.active,(select count(*) from movie_room_vote v where v.room=m.room and v.actor=m.actor) as voted from movie_room_member m join profile p on p.actor=m.actor where m.room=? order by m.joined,p.username",id);
         for(var participant:members)participant.put("isSelf",Objects.equals(participant.get("username"),db.queryForObject("select username from profile where actor=?",String.class,actor)));
-        result.put("members",members);result.put("genre",r.get("genre"));result.put("genres",genres(r));
+        result.put("members",members);result.put("genre",r.get("genre"));result.put("genres",genres(r));result.put("type",r.get("media_type"));
         var titles=db.queryForList("select snapshot from movie_room_title where room=? order by position",String.class,id);
         result.put("titles",titles.stream().map(s->{try{return mapper.readTree(s);}catch(Exception e){throw new IllegalStateException(e);}}).toList());
         result.put("votes",db.queryForList("select title,liked from movie_room_vote where room=? and actor=?",id,actor));
