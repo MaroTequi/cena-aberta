@@ -1,0 +1,67 @@
+.account-resend-button:hover:not(:disabled) {
+  background: #383024;
+  border-color: var(--accent);
+}
+.account-resend-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.account-resend small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.room-nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 7px 13px 7px 8px;
+  border: 1px solid #4e5165;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #272e40, #1c2230);
+  color: #f3e8da;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px #0002;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.room-nav-symbol {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #eab56818;
+  color: var(--accent);
+}
+.room-nav-button:hover {
+  border-color: var(--accent);
+  background: #303346;
+  color: #fff;
+}
+.room-nav-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.room-chosen > .room-nav-button {
+  margin-top: 10px;
+}
+
+.import-page {
+  max-width: 1000px;
+  padding-bottom: 48px;
+}
+.import-row {
+  display: grid;
+  gap: 10px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
