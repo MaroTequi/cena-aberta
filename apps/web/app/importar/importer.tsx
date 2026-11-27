@@ -240,14 +240,6 @@ export function LetterboxdImporter() {
   const selected = matches.filter((m) => m.selected && m.selected !== "ignore").length;
   return (
     <main className="wrap import-page">
-      <header className="room-header">
-        <Link href="/" className="account-brand">
-          Cena Aberta
-        </Link>
-        <Link href="/?aba=profile" className="room-nav-button">
-          Meu perfil
-        </Link>
-      </header>
       <div className="import-hero">
         <span className="room-eyebrow">SEU HISTÓRICO, UM NOVO CAPÍTULO</span>
         <div className="import-brand-symbol" aria-hidden="true">

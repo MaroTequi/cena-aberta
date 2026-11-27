@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { EditorialLinks } from "../../editorial-links";
+import { UserPageHeader } from "../../user-pages";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "../../../lib/auth";
@@ -44,16 +43,7 @@ export default async function PersonPage({
   const person: Person | null = response?.ok ? await response.json() : null;
   return (
     <>
-      <header className="top">
-        <div className="wrap nav">
-          <Link className="logo" href="/">
-            <span className="mark">◈</span> cena<span>aberta</span>
-          </Link>
-          <nav aria-label="Navegação principal">
-            <EditorialLinks />
-          </nav>
-        </div>
-      </header>
+      <UserPageHeader />
       <main className="wrap person-page">
         <a className="person-back" href={back}>
           <svg

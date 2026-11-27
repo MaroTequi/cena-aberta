@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { NotificationBell } from "../notification-bell";
 import { useEffect, useState } from "react";
 import { UiIcon } from "../ui-icons";
 import { ProfileAvatar } from "../profile-form";
@@ -122,18 +121,6 @@ export function FriendsPanel({ profile }: { profile: { name: string; avatar?: st
   }
   return (
     <main className="wrap friends-page">
-      <header className="room-header">
-        <Link className="account-brand" href="/">
-          Cena Aberta
-        </Link>
-        <div className="row">
-          <NotificationBell />
-          <Link className="room-nav-button room-profile-link" href="/?aba=profile">
-            <ProfileAvatar name={profile.name} avatar={profile.avatar} />
-            Meu perfil
-          </Link>
-        </div>
-      </header>
       <nav className="work-back-links" aria-label="Navegação de Amigos">
         <Link
           className="room-nav-button"

@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ReviewReports } from "./review-reports";
 import { AdminBackup } from "./backup";
@@ -138,14 +137,6 @@ export function FeedbackInbox() {
   }
   return (
     <main className="wrap feedback-inbox">
-      <header className="room-header">
-        <Link href="/" className="account-brand">
-          Cena Aberta
-        </Link>
-        <Link href="/?aba=profile" className="room-nav-button">
-          Meu perfil
-        </Link>
-      </header>
       <span className="room-eyebrow">ADMINISTRAÇÃO</span>
       <h1>Feedback da comunidade</h1>
       <p>Relatos privados de bugs e sugestões.</p>

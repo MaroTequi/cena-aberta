@@ -67,7 +67,7 @@ export function FriendsFeed() {
       <main className="wrap friends-page feed-page">
         <div className="room-intro">
           <span className="room-eyebrow">O QUE A TURMA ANDA VENDO</span>
-          <h1>Feed</h1>
+          <h1>Mural</h1>
           <p>Sessões, notas e resenhas recentes dos seus amigos.</p>
         </div>
         <Recommendations />

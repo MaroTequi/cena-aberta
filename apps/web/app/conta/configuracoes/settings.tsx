@@ -10,6 +10,7 @@ import {
 import { RatingPreference } from "../../star-rating";
 import { signOut } from "next-auth/react";
 import { ExportData } from "./export-data";
+import { StreamingServices } from "./streaming-services";
 export function AccountSettings({ supported }: { supported: boolean }) {
   const [state, setState] = useState(""),
     [action, setAction] = useState(""),
@@ -54,9 +55,6 @@ export function AccountSettings({ supported }: { supported: boolean }) {
   }
   return (
     <main className="wrap account-settings">
-      <Link className="account-brand" href="/">
-        Cena Aberta
-      </Link>
       <section className="panel">
         <h1>Minha conta</h1>
         <section className="form">
@@ -92,6 +90,7 @@ export function AccountSettings({ supported }: { supported: boolean }) {
           <h2>Avaliações</h2>
           <RatingPreference />
         </section>
+        <StreamingServices />
         <ExportData />
         {!supported ? (
           <p>Gerencie esta conta pelo seu provedor de acesso.</p>

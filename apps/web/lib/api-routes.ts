@@ -38,6 +38,12 @@ export const routes: ReadonlyArray<readonly [string, RegExp, Target]> = [
   ["GET", /^me\/ranking$/, "social"],
   ["PUT", /^me\/ranking(?:\/[a-z0-9-]+)?$/, "social"],
   ["GET", /^title-batch$/, "catalog"],
+  ["GET", /^providers$/, "catalog"],
+  ["GET", /^people$/, "catalog"],
+  ["GET", /^titles\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+)\/providers$/, "catalog"],
+  ["GET", /^titles\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+)\/trailer$/, "catalog"],
+  ["GET", /^me\/providers$/, "social"],
+  ["PUT", /^me\/providers$/, "social"],
   ["GET", /^titles(?:\/(?:demo-[a-z0-9-]+|tmdb-(?:movie|tv)-[0-9]+|(?:ep|season)-[a-z0-9-]+))?$/, "catalog"],
   ["PUT", /^titles\/[a-z0-9-]+\/(?:spoiler-vote|review-like)$/, "social"],
   ["GET", /^(?:me|profiles\/[a-z0-9_]+|titles\/[a-z0-9-]+\/(?:reviews|community|friends|review-comments))$/, "social"],
@@ -75,7 +81,7 @@ export function resolveRoute(method: string, path: string): Target | null {
 }
 
 /** Rotas do social que consultam o catálogo em lote e por isso precisam do mesmo prazo de `title-batch`. */
-const BATCH_PATHS = new Set(["title-batch", "me/stats", "library-page"]);
+const BATCH_PATHS = new Set(["title-batch", "me/stats", "library-page", "providers"]);
 
 /**
  * Prazo (ms) para o serviço interno responder.

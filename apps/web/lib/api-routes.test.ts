@@ -84,9 +84,28 @@ test("encaminha temporadas, episódios, progresso e denúncias apenas pelos mét
 });
 
 test("rotas que consultam o catálogo em lote ganham o prazo longo", () => {
-  for (const path of ["title-batch", "me/stats", "library-page"])
+  for (const path of ["title-batch", "me/stats", "library-page", "providers"])
     assert.equal(upstreamTimeout(path, false), 25000, path);
   assert.equal(upstreamTimeout("rooms/abc/start", false), 65000);
   assert.equal(upstreamTimeout("me/export", true), 30000);
   assert.equal(upstreamTimeout("feed", false), 6500);
+});
+
+test("onde assistir: disponibilidade e lista de serviços vão ao catálogo; os meus streamings, ao social", () => {
+  assert.equal(resolveRoute("GET", "providers"), "catalog");
+  assert.equal(resolveRoute("GET", "titles/tmdb-movie-603/providers"), "catalog");
+  assert.equal(resolveRoute("GET", "titles/demo-mare-alta/providers"), "catalog");
+  assert.equal(resolveRoute("GET", "titles/season-demo-mare-alta-s1/providers"), null);
+  assert.equal(resolveRoute("GET", "titles/tmdb-movie-603/trailer"), "catalog");
+  assert.equal(resolveRoute("GET", "people"), "catalog");
+  assert.equal(resolveRoute("GET", "people/6384"), null, "o perfil da pessoa é lido pela página, não pelo BFF");
+  for (const method of ["POST", "PUT", "DELETE"]) assert.equal(resolveRoute(method, "people"), null, method);
+  assert.equal(resolveRoute("GET", "titles/tmdb-tv-1399/trailer"), "catalog");
+  assert.equal(resolveRoute("GET", "titles/season-demo-mare-alta-s1/trailer"), null);
+  for (const method of ["POST", "PUT", "DELETE"])
+    assert.equal(resolveRoute(method, "titles/tmdb-movie-603/trailer"), null, method);
+  assert.equal(resolveRoute("GET", "me/providers"), "social");
+  assert.equal(resolveRoute("PUT", "me/providers"), "social");
+  for (const method of ["POST", "PUT", "DELETE"]) assert.equal(resolveRoute(method, "providers"), null, method);
+  for (const method of ["POST", "DELETE"]) assert.equal(resolveRoute(method, "me/providers"), null, method);
 });

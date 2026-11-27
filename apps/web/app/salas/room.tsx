@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { NotificationBell } from "../notification-bell";
 import { useEffect, useRef, useState } from "react";
 import { RoomFriends } from "./room-friends";
 import { UiIcon } from "../ui-icons";
@@ -38,6 +37,8 @@ type Room = {
     supporters: { isSelf?: boolean; username: string; name: string; avatar?: string }[];
   }[];
   genres?: number[];
+  subscribedOnly?: boolean;
+  providerCount?: number;
   genre: number;
   id: string;
   name: string;
@@ -291,18 +292,6 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
   }
   return (
     <main className="wrap rooms-page">
-      <header className="room-header">
-        <Link href="/" className="account-brand">
-          Cena Aberta
-        </Link>
-        <div className="row">
-          <NotificationBell />
-          <Link className="room-nav-button room-profile-link" href="/?aba=profile">
-            <ProfileAvatar name={profile.name} avatar={profile.avatar} />
-            Meu perfil
-          </Link>
-        </div>
-      </header>
       <div className="room-intro">
         <span className="room-eyebrow">UMA ESCOLHA, TODO MUNDO JUNTO</span>
         <h1>
@@ -514,6 +503,44 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
                   {room.isOwner ? "Escolha um ou mais antes de iniciar." : "O anfitrião escolhe os gêneros."}
                 </small>
               </fieldset>
+              <fieldset className="room-genre-filter">
+                <legend>Onde vamos assistir?</legend>
+                <div className="room-genre-options">
+                  {[
+                    [false, "Qualquer lugar"],
+                    [true, "Só o que a gente assina"],
+                  ].map(([value, label]) => (
+                    <button
+                      type="button"
+                      key={String(value)}
+                      aria-pressed={!!room.subscribedOnly === value}
+                      disabled={!room.isOwner}
+                      aria-disabled={busy || undefined}
+                      onClick={() => {
+                        if (!busy) void action(() => api("/" + id + "/settings", "PUT", { subscribedOnly: value }));
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {room.subscribedOnly && !room.providerCount ? (
+                  <small className="room-filter-warning">
+                    Ninguém da sala marcou streamings ainda. Marquem em{" "}
+                    <Link href="/conta/configuracoes#streamings">Configurações</Link> ou a rodada não começa.
+                  </small>
+                ) : (
+                  <small>
+                    {room.subscribedOnly
+                      ? "Só entram obras incluídas em " +
+                        (room.providerCount === 1 ? "1 serviço" : room.providerCount + " serviços") +
+                        " que alguém da sala assina."
+                      : room.isOwner
+                        ? "Ligue o filtro para ver só obras incluídas em um serviço que alguém da sala assina."
+                        : "O anfitrião pode limitar a rodada ao que a sala assina."}
+                  </small>
+                )}
+              </fieldset>
               <p>
                 Começamos pelas obras do <strong className="profile-section-name">Vou ver</strong>. Se as listas
                 estiverem vazias, usamos sugestões do TMDB. Misturamos as listas sem repetir obras, em uma rodada de até
@@ -621,7 +648,8 @@ export function MovieRoom({ id, profile }: { id?: string; profile: { name: strin
                 <div className="room-progress">
                   <span>
                     {selectedGenres.length ? selectedGenres.map((g) => genres[g]).join(" · ") : "Todos os gêneros"} ·
-                    Seu voto · {room.votes.length}/{room.titles.length}
+                    {room.subscribedOnly ? " Só o que a gente assina ·" : ""} Seu voto · {room.votes.length}/
+                    {room.titles.length}
                   </span>
                   <progress value={room.votes.length} max={room.titles.length} />
                 </div>

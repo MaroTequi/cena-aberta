@@ -31,6 +31,8 @@ import { RecommendTitle } from "./title-social/recommend-title";
 import { TitleFriends } from "./title-social/title-friends";
 import { ReviewSocial } from "./title-social/review-social";
 import { MainHeader, categories } from "./main-header";
+import { WhereToWatch } from "./where-to-watch";
+import { TrailerButton } from "./trailer";
 
 import { api } from "../lib/client-api";
 import type {
@@ -978,6 +980,9 @@ export function App({
                 <h2>{title.name}</h2>
                 <p>{title.summary || "Sinopse indisponível."}</p>
                 <FilmFacts title={title} />
+                {(title.format === "movie" || title.format === "tv") && (
+                  <TrailerButton key={"trailer-" + title.id} titleId={title.id} titleName={title.name} />
+                )}
                 {data?.profile && (
                   <>
                     <div className="row">
@@ -1099,7 +1104,7 @@ export function App({
                         )}
                         {title.format !== "tv" && title.format !== "seas" && (
                           <StarRating
-                            key={title.id}
+                            key={"rating-" + title.id}
                             disabled={busy}
                             value={entry.rating}
                             onChange={(rating) => {
@@ -1108,7 +1113,7 @@ export function App({
                           />
                         )}
                         <ReviewEditor
-                          key={title.id}
+                          key={"review-" + title.id}
                           title={title.id}
                           initial={entry}
                           disabled={busy}
@@ -1125,10 +1130,13 @@ export function App({
                 )}
               </div>
             </div>
-            {title.format === "tv" && <SeriesSeasons key={title.id} title={title.id} />}
+            {title.format === "tv" && <SeriesSeasons key={"seasons-" + title.id} title={title.id} />}
             {chronology}
             {!!title.details?.people?.length && <WorkPeople people={title.details.people} titleId={title.id} />}
-            {data?.profile && <TitleFriends key={title.id} titleId={title.id} watched={entry.watched} />}
+            {(title.format === "movie" || title.format === "tv") && (
+              <WhereToWatch key={"watch-" + title.id} titleId={title.id} signedIn={!!data?.profile} />
+            )}
+            {data?.profile && <TitleFriends key={"friends-" + title.id} titleId={title.id} watched={entry.watched} />}
             {community && (
               <section className="community" aria-labelledby="community-heading">
                 <h3 id="community-heading">Comunidade</h3>

@@ -1,0 +1,97 @@
+"use client";
+import { useEffect, useState } from "react";
+import { api } from "../../../lib/client-api";
+import { toggleProvider, type Provider } from "../../../lib/streaming";
+import { ProviderLogo } from "../../provider-logo";
+
+/**
+ * Seção "Meus streamings" das configurações: a pessoa marca os serviços que assina. Cada toque
+ * salva a lista inteira; se o salvamento falhar, a marcação volta ao que estava.
+ */
+export function StreamingServices() {
+  const [options, setOptions] = useState<Provider[] | null>(null),
+    [selected, setSelected] = useState<number[]>([]),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [attempt, retry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    Promise.all([api<Provider[]>("providers"), api<{ providers: number[] }>("me/providers")])
+      .then(([available, mine]) => {
+        if (!active) return;
+        setOptions(available);
+        setSelected(mine.providers);
+      })
+      .catch((failure) => {
+        if (active) setError(failure.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+  async function toggle(id: number) {
+    if (busy) return;
+    const previous = selected;
+    const next = toggleProvider(selected, id);
+    setSelected(next);
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const saved = await api<{ providers: number[] }>("me/providers", "PUT", { providers: next });
+      setSelected(saved.providers);
+      setNotice("Streamings salvos.");
+    } catch (failure) {
+      setSelected(previous);
+      setError((failure as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="form streaming-services" id="streamings">
+      <h2>Meus streamings</h2>
+      <p>
+        Marque os serviços que você assina. Eles ficam destacados em <strong>Onde assistir</strong> e valem para o
+        filtro <strong>Só o que a gente assina</strong> das salas.
+      </p>
+      {!options && !error && <p role="status">Carregando serviços…</p>}
+      {options && !options.length && <p className="muted">Nenhum serviço disponível no momento.</p>}
+      {options && options.length > 0 && (
+        <div className="provider-options" role="group" aria-label="Serviços de streaming">
+          {options.map((provider) => (
+            <button
+              type="button"
+              key={provider.id}
+              className="provider-chip"
+              aria-pressed={selected.includes(provider.id)}
+              aria-disabled={busy || undefined}
+              onClick={() => void toggle(provider.id)}
+            >
+              <ProviderLogo provider={provider} />
+              <span>{provider.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {notice && <p role="status">{notice}</p>}
+      {error && (
+        <p className="message error" role="alert">
+          {error}{" "}
+          {!options && (
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                retry((n) => n + 1);
+              }}
+            >
+              Tentar novamente
+            </button>
+          )}
+        </p>
+      )}
+    </section>
+  );
+}

@@ -10,7 +10,7 @@ export function CatalogDrawer({
   categories: string[][];
   current: string;
   onSelect: (id: string) => void;
-  /** Páginas extras (Feed, Coleções…) que no celular saem da barra e entram no menu. */
+  /** Páginas extras (Mural, Coleções…) que no celular saem da barra e entram no menu. */
   links?: readonly { href: string; label: string }[];
   /** Caminho da página extra aberta, para destacá-la. */
   currentLink?: string;

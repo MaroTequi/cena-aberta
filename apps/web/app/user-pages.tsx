@@ -9,14 +9,31 @@ import { api } from "../lib/client-api";
 import type { Title } from "../lib/types";
 
 /**
- * Cabeçalho das páginas avulsas (feed, coleções, estatísticas): o mesmo cabeçalho principal da home, para quem entra
- * aqui não perder a navegação. Renderize antes do `<main>`.
- * @param current caminho da página aberta, para marcar o link ativo
+ * Cabeçalho das páginas avulsas (feed, coleções, estatísticas, notícias, pessoa): o mesmo cabeçalho principal da home,
+ * para quem entra aqui não perder a navegação. Renderize antes do `<main>`.
+ * @param current caminho da página pessoal aberta, para marcar o link ativo ("" nas outras páginas)
+ * @param authenticated se há sessão (sem sessão mostra Entrar/Criar conta)
+ * @param emailAccounts se o login por e-mail está habilitado
+ * @param tab item da navegação em destaque (ex.: "news")
+ * @param knownProfile nome e avatar já carregados pela página (evita buscar de novo)
  */
-export function UserPageHeader({ current }: { current: string }) {
+export function UserPageHeader({
+  current = "",
+  authenticated = true,
+  emailAccounts = false,
+  tab = "",
+  knownProfile,
+}: {
+  current?: string;
+  authenticated?: boolean;
+  emailAccounts?: boolean;
+  tab?: string;
+  knownProfile?: { name: string; avatar?: string };
+}) {
   const router = useRouter();
   const [profile, setProfile] = useState<{ name: string; avatar?: string } | null>(null);
   useEffect(() => {
+    if (!authenticated || knownProfile) return;
     let active = true;
     api<{ profile?: { name: string; avatar?: string } }>("me?summary=true")
       .then((me) => {
@@ -28,13 +45,14 @@ export function UserPageHeader({ current }: { current: string }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authenticated, knownProfile]);
   return (
     <MainHeader
-      authenticated
-      tab=""
+      authenticated={authenticated}
+      emailAccounts={emailAccounts}
+      tab={tab}
       activePage={current}
-      profile={profile}
+      profile={knownProfile ?? profile}
       onCategory={(id) => router.push("/?aba=" + id)}
       onProfile={() => router.push("/?aba=profile")}
     />
