@@ -13,7 +13,7 @@ class FeedbackTest {
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
  new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V13__feedback_admin.sql"),new ClassPathResource("db/migration/V2__email_accounts.sql"),new ClassPathResource("db/migration/V20__account_state.sql"),new ClassPathResource("db/migration/V21__feedback_images.sql"),new ClassPathResource("db/migration/V24__feedback_thanks_claim.sql"),new ClassPathResource("db/migration/V29__review_reports.sql")).execute(source);
  db=new JdbcTemplate(source);for(String a:List.of("admin","member"))db.update("insert into profile(actor,username,name) values(?,?,?)",a,a,a);
- db.update("insert into app_admin(actor) values('admin')");service=new Feedback(db,"secret");
+ db.update("insert into app_admin(actor) values('admin')");service=new Feedback(db);
  }
  private int feedbackReads(){
   return db.queryForObject("""

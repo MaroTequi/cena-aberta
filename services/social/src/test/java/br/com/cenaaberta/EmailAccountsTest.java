@@ -31,7 +31,7 @@ class EmailAccountsTest {
     private EmailAccounts service(boolean restricted,String invitations) {
         var factory=new StaticListableBeanFactory();
         factory.addBean("mail",mail);
-        return new EmailAccounts(db,factory.getBeanProvider(JavaMailSender.class),UUID.randomUUID().toString(),
+        return new EmailAccounts(db,factory.getBeanProvider(JavaMailSender.class),
             "smtp","https://example.test","sender@example.test",restricted,invitations);
     }
     private String link(EmailAccounts accounts,String purpose,String email) {

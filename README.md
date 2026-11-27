@@ -12,7 +12,7 @@ Marcar **Já vi** registra a primeira sessão no **Diário**, remove a obra do *
 
 ## Executar localmente
 
-Requisitos: Java 21, Maven e Node.js 24. Na raiz deste projeto:
+Requisitos: Java 21, Maven e Node.js 24. Na raiz deste projeto, `sdk env` (usa `.sdkmanrc`) e `nvm use` (usa `.nvmrc`) selecionam as versões certas:
 
 ```shell
 mvn -B package

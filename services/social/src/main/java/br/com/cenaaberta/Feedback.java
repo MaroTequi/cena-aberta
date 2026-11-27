@@ -1,6 +1,4 @@
 package br.com.cenaaberta;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,12 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class Feedback {
  record Submission(String id,String kind,String description,String page,String version,List<String> images){ Submission(String id,String kind,String description,String page,String version){this(id,kind,description,page,version,null);} }
  record Change(String status){}
- private final JdbcTemplate db;private final String secret;
+ private final JdbcTemplate db;
  @Value("${feedback.images.max-bytes:4000000000}") long imageLimit=4_000_000_000L;
- Feedback(JdbcTemplate db,@Value("${internal.secret}") String secret){this.db=db;this.secret=secret;}
+ Feedback(JdbcTemplate db){this.db=db;}
  @ModelAttribute void verify(HttpServletRequest request){
-  String key=request.getHeader("X-Internal-Key"),actor=request.getHeader("X-Actor");
-  if(key==null||!MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),key.getBytes(StandardCharsets.UTF_8)))throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+  String actor=request.getHeader("X-Actor");
   if(actor==null||db.queryForObject("select count(*) from profile where actor=? and active=true",Integer.class,actor)!=1)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Entre e conclua seu perfil para enviar feedback.");
  }
  boolean admin(String actor){return db.queryForObject("select count(*) from app_admin where actor=?",Integer.class,actor)==1;}

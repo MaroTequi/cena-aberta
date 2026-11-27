@@ -3,7 +3,7 @@ package br.com.cenaaberta;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.mockito.Mockito.mock;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -19,7 +19,7 @@ class MonthlyReviewsTest {
             migrations.addScript(new ClassPathResource("db/migration/"+file));
         migrations.execute(source);
         var db=new JdbcTemplate(source);
-        var service=new Social(db,new ObjectMapper(),"a".repeat(24),"b".repeat(24),"");
+        var service=new Social(db,new ActiveActors(db),mock(LibraryEntries.class),mock(Ranking.class));
         var date=OffsetDateTime.now();
         for(int i=0;i<60;i++){
             String user="reader"+i;

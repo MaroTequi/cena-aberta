@@ -1,18 +1,163 @@
-import type {ReactNode} from "react";
-import type {Release} from "../lib/releases";
-import {LandingPreview} from "./landing-preview";
-import {UiIcon} from "./ui-icons";
-export function Landing({actions,releases,monthlyReviews}:{monthlyReviews?:ReactNode;actions:ReactNode;releases:Release[]}){
- return <div className="landing-current"><section className="landing-intro"><div><p className="eyebrow">FILMES · SÉRIES · ANIMES</p><h1>O que você vê.<br/><em>O que vocês vão ver.</em></h1><p className="landing-lead">Seu diário audiovisual e sua turma no mesmo lugar. Descubra histórias, registre suas opiniões e escolha a próxima sessão com os amigos.</p><div className="landing-actions">{actions}</div><p className="landing-access">Alpha por convite · Use um e-mail autorizado para criar sua conta.</p></div><LandingPreview releases={releases}/></section>
- {monthlyReviews}
- <section className="landing-current-features" aria-labelledby="landing-features"><p className="eyebrow">SEU REPERTÓRIO, DO SEU JEITO</p><h2 id="landing-features">Mais do que lembrar o que você viu.</h2><div className="landing-feature-grid">
- <article><span className="landing-feature-icon" aria-hidden="true">☆</span><h3>Dê sua nota, conte sua história</h3><p>Marque “Já vi”, registre no <strong className="profile-section-name">Diário</strong> e escreva e salve sua resenha. Em séries e animes, avalie cada episódio.</p></article>
- <article><span className="landing-feature-icon"><UiIcon name="crown"/></span><h3>Seu ranking tem personalidade</h3><p>Organize mini cards em cinco categorias. Filmes, séries e animes têm rankings separados para suas escolhas fazerem sentido.</p></article>
- <article><span className="landing-feature-icon"><UiIcon name="friends"/></span><h3>Encontre sua turma</h3><p>Busque pessoas, envie pedidos de amizade e visite seus perfis. Nas obras, descubra resenhas e médias da comunidade.</p></article>
- <article><span className="landing-feature-icon"><UiIcon name="eye"/></span><h3>Você escolhe o que mostrar</h3><p>Controle a visibilidade de <strong className="profile-section-name">Vou ver</strong>, <strong className="profile-section-name">Meu ranking</strong>, <strong className="profile-section-name">Já vistos e avaliações</strong> e <strong className="profile-section-name">Diário</strong>. Novas avaliações são públicas; você pode torná-las privadas.</p></article>
- <article><span className="landing-feature-icon"><UiIcon name="import"/></span><h3>Sua história vem junto</h3><p>Importe o ZIP do Letterboxd, revise as correspondências e traga notas, resenhas, <strong className="profile-section-name">Diário</strong> e filmes do <strong className="profile-section-name">Vou ver</strong>.</p></article>
- <article><span className="landing-feature-icon" aria-hidden="true">＋</span><h3>Guarde a próxima descoberta</h3><p>Explore filmes, séries e animes com dados do TMDB. Salve no <strong className="profile-section-name">Vou ver</strong>.</p></article>
- </div></section>
- <section className="landing-together" aria-labelledby="landing-together"><div><p className="eyebrow">MENOS INDECISÃO, MAIS CINEMA</p><h2 id="landing-together">“O que a gente vai ver?”<br/>Agora tem uma sala para isso.</h2><p>Reúna de 2 a 8 pessoas. Escolha entre todos os tipos, filmes, séries ou animes. Depois, filtre por um ou mais gêneros. A sala mistura o <strong className="profile-section-name">Vou ver</strong> dos participantes; se faltarem filmes, entram sugestões do catálogo.</p><p>Deslize ou use os botões para votar. Quando todos curtem a mesma obra, ela vira um match. O anfitrião confirma a escolha final.</p></div><ol><li><span>01</span><div><strong>Reúna a turma</strong><p>Crie a sala e compartilhe o link. Todos precisam de conta na alpha.</p></div></li><li><span>02</span><div><strong>Quero ver ou passo?</strong><p>Cada pessoa vota no seu ritmo. Se a maioria quiser ver, quem passou pode reconsiderar e ver quem topou.</p></div></li><li><span>03</span><div><strong>Encontrem a escolha da noite</strong><p>Escolham um match ou continuem descobrindo novos títulos.</p></div></li></ol></section>
- <section className="landing-final"><p className="eyebrow">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</p><h2>Uma conta. Muitas sessões pela frente.</h2><p>Use no computador ou no navegador do celular. O Cena Aberta está em alpha: teste os recursos e envie ideias pelo botão de feedback.</p><div className="landing-actions">{actions}</div><small>O Cena Aberta organiza suas experiências e ajuda a escolher o que ver. Não oferece reprodução de filmes ou episódios.</small></section></div>;
+import type { ReactNode } from "react";
+import type { Release } from "../lib/releases";
+import { LandingPreview } from "./landing-preview";
+import { UiIcon } from "./ui-icons";
+export function Landing({
+  actions,
+  releases,
+  monthlyReviews,
+}: {
+  actions: ReactNode;
+  releases: Release[];
+  monthlyReviews?: ReactNode;
+}) {
+  return (
+    <div className="landing-current">
+      <section className="landing-intro">
+        <div>
+          <p className="eyebrow">FILMES · SÉRIES · ANIMES</p>
+          <h1>
+            O que você vê.
+            <br />
+            <em>O que vocês vão ver.</em>
+          </h1>
+          <p className="landing-lead">
+            Seu diário audiovisual e sua turma no mesmo lugar. Descubra histórias, registre suas opiniões e escolha a
+            próxima sessão com os amigos.
+          </p>
+          <div className="landing-actions">{actions}</div>
+          <p className="landing-access">Alpha por convite · Use um e-mail autorizado para criar sua conta.</p>
+        </div>
+        <LandingPreview releases={releases} />
+      </section>
+      {monthlyReviews}
+      <section className="landing-current-features" aria-labelledby="landing-features">
+        <p className="eyebrow">SEU REPERTÓRIO, DO SEU JEITO</p>
+        <h2 id="landing-features">Mais do que lembrar o que você viu.</h2>
+        <div className="landing-feature-grid">
+          <article>
+            <span className="landing-feature-icon" aria-hidden="true">
+              ☆
+            </span>
+            <h3>Dê sua nota, conte sua história</h3>
+            <p>
+              Marque “Já vi”, registre no <strong className="profile-section-name">Diário</strong> e escreva e salve sua
+              resenha. Em séries e animes, avalie cada episódio.
+            </p>
+          </article>
+          <article>
+            <span className="landing-feature-icon">
+              <UiIcon name="crown" />
+            </span>
+            <h3>Seu ranking tem personalidade</h3>
+            <p>
+              Organize mini cards em cinco categorias. Filmes, séries e animes têm rankings separados para suas escolhas
+              fazerem sentido.
+            </p>
+          </article>
+          <article>
+            <span className="landing-feature-icon">
+              <UiIcon name="friends" />
+            </span>
+            <h3>Encontre sua turma</h3>
+            <p>
+              Busque pessoas, envie pedidos de amizade e visite seus perfis. Nas obras, descubra resenhas e médias da
+              comunidade.
+            </p>
+          </article>
+          <article>
+            <span className="landing-feature-icon">
+              <UiIcon name="eye" />
+            </span>
+            <h3>Você escolhe o que mostrar</h3>
+            <p>
+              Controle a visibilidade de <strong className="profile-section-name">Vou ver</strong>,{" "}
+              <strong className="profile-section-name">Meu ranking</strong>,{" "}
+              <strong className="profile-section-name">Já vistos e avaliações</strong> e{" "}
+              <strong className="profile-section-name">Diário</strong>. Novas avaliações são públicas; você pode
+              torná-las privadas.
+            </p>
+          </article>
+          <article>
+            <span className="landing-feature-icon">
+              <UiIcon name="import" />
+            </span>
+            <h3>Sua história vem junto</h3>
+            <p>
+              Importe o ZIP do Letterboxd, revise as correspondências e traga notas, resenhas,{" "}
+              <strong className="profile-section-name">Diário</strong> e filmes do{" "}
+              <strong className="profile-section-name">Vou ver</strong>.
+            </p>
+          </article>
+          <article>
+            <span className="landing-feature-icon" aria-hidden="true">
+              ＋
+            </span>
+            <h3>Guarde a próxima descoberta</h3>
+            <p>
+              Explore filmes, séries e animes com dados do TMDB. Salve no{" "}
+              <strong className="profile-section-name">Vou ver</strong>.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section className="landing-together" aria-labelledby="landing-together">
+        <div>
+          <p className="eyebrow">MENOS INDECISÃO, MAIS CINEMA</p>
+          <h2 id="landing-together">
+            “O que a gente vai ver?”
+            <br />
+            Agora tem uma sala para isso.
+          </h2>
+          <p>
+            Reúna de 2 a 8 pessoas. Escolha entre todos os tipos, filmes, séries ou animes. Depois, filtre por um ou
+            mais gêneros. A sala mistura o <strong className="profile-section-name">Vou ver</strong> dos participantes;
+            se faltarem filmes, entram sugestões do catálogo.
+          </p>
+          <p>
+            Deslize ou use os botões para votar. Quando todos curtem a mesma obra, ela vira um match. O anfitrião
+            confirma a escolha final.
+          </p>
+        </div>
+        <ol>
+          <li>
+            <span>01</span>
+            <div>
+              <strong>Reúna a turma</strong>
+              <p>Crie a sala e compartilhe o link. Todos precisam de conta na alpha.</p>
+            </div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>
+              <strong>Quero ver ou passo?</strong>
+              <p>
+                Cada pessoa vota no seu ritmo. Se a maioria quiser ver, quem passou pode reconsiderar e ver quem topou.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>
+              <strong>Encontrem a escolha da noite</strong>
+              <p>Escolham um match ou continuem descobrindo novos títulos.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+      <section className="landing-final">
+        <p className="eyebrow">SUA PRÓXIMA HISTÓRIA COMEÇA AQUI</p>
+        <h2>Uma conta. Muitas sessões pela frente.</h2>
+        <p>
+          Use no computador ou no navegador do celular. O Cena Aberta está em alpha: teste os recursos e envie ideias
+          pelo botão de feedback.
+        </p>
+        <div className="landing-actions">{actions}</div>
+        <small>
+          O Cena Aberta organiza suas experiências e ajuda a escolher o que ver. Não oferece reprodução de filmes ou
+          episódios.
+        </small>
+      </section>
+    </div>
+  );
 }

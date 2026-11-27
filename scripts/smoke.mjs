@@ -104,6 +104,7 @@ try {
   const soc=start("java",["-jar","services/social/target/social-0.1.0-alpha.jar"],{...database("social"),PORT:"19182",INTERNAL_SECRET:key,CATALOG_INTERNAL_SECRET:key,CATALOG_URL:catalog,INVITE_ONLY:"true",INVITED_EMAILS:email.toUpperCase(),EMAIL_MODE:"log",FRONTEND_URL:"http://127.0.0.1:19180"});
   await Promise.all([ready(catalog+"/health",cat),ready(social+"/health",soc)]);
   await request(catalog,"/titles",{authorized:false,expected:401});
+  await request(social,"/me",{authorized:false,expected:401});
   const anime=await request(catalog,"/titles?type=anime");
   assert.deepEqual(anime.items.map(item=>item.format).sort(),["movie","tv"]);
   assert.equal((await request(catalog,"/titles?query=mare")).items[0].id,"demo-mare-alta");

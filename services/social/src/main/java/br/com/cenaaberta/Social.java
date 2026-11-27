@@ -2,25 +2,16 @@ package br.com.cenaaberta;
 
 
 
-import java.net.URI;
 
-import java.net.http.*;
 
-import java.nio.charset.StandardCharsets;
-
-import java.security.MessageDigest;
 
 import java.time.*;
 
 import java.util.*;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 
-import jakarta.servlet.http.HttpServletRequest;
 
-import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.boot.*;
 
@@ -35,8 +26,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.web.bind.annotation.*;
-
 import org.springframework.web.server.ResponseStatusException;
+
+
+import static br.com.cenaaberta.Guards.*;
 
 
 
@@ -46,28 +39,19 @@ import org.springframework.web.server.ResponseStatusException;
 
 public class Social {
 
-    private static final ZoneId DIARY_ZONE=ZoneId.of("America/Sao_Paulo");
-
     public record Profile(String username,String name,String bio,String avatar) {}
-
-    public record RankedFilm(String title,Integer tier) {}
-
-    public record RankingChange(Integer version,List<RankedFilm> items) {}
-
-    public record LibraryChange(Boolean value,Integer rating,String review,Boolean spoiler,Integer version) {}
-
-    public record Viewing(String title,LocalDate date,boolean rewatch,
-
-                          @JsonInclude(JsonInclude.Include.NON_NULL) OffsetDateTime watchedAt) {}
 
 
     private final JdbcTemplate db;
 
-    private final ObjectMapper mapper;
 
-    private final String secret, catalogKey, catalog;
+    private final ActiveActors actors;
 
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    private final LibraryEntries entries;
+    private final Ranking rankings;
+
+
+
 
 
 
@@ -75,31 +59,12 @@ public class Social {
 
 
 
-    Social(JdbcTemplate db,ObjectMapper mapper,@Value("${internal.secret}") String secret,
+    Social(JdbcTemplate db,
 
-           @Value("${CATALOG_INTERNAL_SECRET}") String catalogKey,
+           ActiveActors actors,LibraryEntries entries,Ranking rankings) {
+        this.rankings=rankings;
 
-           @Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog) {
-
-        this.db=db; this.mapper=mapper; this.secret=secret; this.catalogKey=catalogKey; this.catalog=catalog;
-
-        if (secret.length()<24 || catalogKey.length()<24) throw new IllegalArgumentException("Chaves internas precisam de pelo menos 24 caracteres");
-
-    }
-
-
-
-    @ModelAttribute
-
-    void verify(HttpServletRequest request) {
-
-        if (request.getRequestURI().equals("/health")) return;
-
-        String actual=request.getHeader("X-Internal-Key");
-
-        if(actual==null || !MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),actual.getBytes(StandardCharsets.UTF_8)))
-
-            fail(HttpStatus.UNAUTHORIZED,"Acesso interno necessário.");
+        this.db=db; this.actors=actors; this.entries=entries;
 
     }
 
@@ -108,293 +73,6 @@ public class Social {
     @GetMapping("/health") Map<String,String> health() { db.queryForObject("select 1",Integer.class); return Map.of("status","ok"); }
 
 
-
-    @GetMapping("/me/ranking")
-
-    Map<String,Object> ranking(@RequestHeader("X-Actor") String actor) {
-
-        active(actor);
-
-        return Map.of("version",db.queryForObject("select ranking_version from profile where actor=?",Integer.class,actor),
-
-            "items",manualRanking(actor),"automatic",seriesRanking(actor,false));
-
-    }
-
-
-
-    private List<Map<String,Object>> manualRanking(String actor) {
-        return db.queryForList("select title,tier from film_ranking where actor=? order by tier,position",actor);
-    }
-
-    private List<Map<String,Object>> seriesRanking(String actor,boolean publicOnly) {
-        String publicFilter=publicOnly?"and l.evaluation_public and not l.hidden and ep.evaluation_public and not ep.hidden ":"";
-        var seasons=db.queryForList("""
-            select e.title,e.season,sum(e.rating) as total,count(*) as votes
-            from episode_rating e
-            join library l on l.actor=e.actor and l.title=e.title and l.watched
-            join library ep on ep.actor=e.actor and ep.title=concat('ep-',e.title,'-s',e.season,'-e',e.episode)
-            where e.actor=?
-            """+publicFilter+"group by e.title,e.season order by e.title,e.season",actor);
-        var scores=new TreeMap<String,IntSummaryStatistics>();
-        for(var season:seasons) {
-            int score=seasonHalfStars(((Number)season.get("total")).longValue(),((Number)season.get("votes")).longValue());
-            scores.computeIfAbsent((String)season.get("title"),id->new IntSummaryStatistics()).accept(score);
-        }
-        return scores.entrySet().stream().map(item->{
-            int score=seriesHalfStars(item.getValue());
-            int tier=5-(score+1)/2;
-            return Map.<String,Object>of("title",item.getKey(),"tier",tier,"average",score/2.0);
-        }).sorted(Comparator.comparingDouble((Map<String,Object> item)->((Number)item.get("average")).doubleValue()).reversed())
-            .toList();
-    }
-
-    @PutMapping("/me/ranking")
-
-    @Transactional
-
-    Map<String,Object> saveRanking(@RequestHeader("X-Actor") String actor,@RequestBody RankingChange input) {
-
-        lockActive(actor);
-
-        Integer version=db.queryForObject("select ranking_version from profile where actor=?",Integer.class,actor);
-
-        if(input.items()==null || input.items().size()>100) fail(HttpStatus.BAD_REQUEST,"Use até 100 obras.");
-        if(!Objects.equals(version,input.version())) {
-            if(input.version()!=null && input.version()==version-1 && input.items().stream()
-                    .allMatch(item->item!=null && item.title()!=null && item.tier()!=null)) {
-                var requested=input.items().stream().sorted(Comparator.comparing(RankedFilm::tier))
-                    .map(item->Map.of("title",item.title(),"tier",item.tier())).toList();
-                var current=ranking(actor);
-                if(requested.equals(current.get("items")))return current;
-            }
-            fail(HttpStatus.CONFLICT,"Ranking alterado. Recarregue antes de editar.");
-        }
-
-        Set<String> used=new HashSet<>();
-
-        List<String> previous=db.queryForList("select title from film_ranking where actor=?",String.class,actor);
-
-        for(var item:input.items()) {
-
-            if(item==null || item.tier()==null || item.tier()<0 || item.tier()>4 || !used.add(item.title()))
-
-                fail(HttpStatus.BAD_REQUEST,"Ranking inválido.");
-
-            if(item.title()==null || SEASON_ID.matcher(item.title()).matches())fail(HttpStatus.BAD_REQUEST,"Temporadas não entram no ranking.");
-            if(!exists("select count(*) from library where actor=? and title=? and watched=true",actor,item.title()))
-
-                fail(HttpStatus.BAD_REQUEST,"Adicione apenas obras marcadas como assistidas.");
-
-            if(!previous.contains(item.title())&&"tv".equals(verifyTitle(item.title())))
-                fail(HttpStatus.BAD_REQUEST,"A categoria da série vem da média das temporadas.");
-
-        }
-
-        db.update("delete from film_ranking where actor=?",actor);
-
-        int[] positions=new int[5];
-
-        for(var item:input.items())db.update("insert into film_ranking values(?,?,?,?)",actor,item.title(),item.tier(),positions[item.tier()]++);
-
-        db.update("update profile set ranking_version=ranking_version+1 where actor=?",actor);
-
-        return ranking(actor);
-
-    }
-
-
-
-    public record TierChange(Integer tier) {}
-
-    @PutMapping("/me/ranking/{title}")
-    @Transactional
-    Map<String,Object> rankTitle(@RequestHeader("X-Actor") String actor,@PathVariable String title,@RequestBody TierChange input) {
-        lockActive(actor);
-        validateTitle(title);
-        Integer tier=input.tier();
-        if(tier==null || tier< -1 || tier>4)fail(HttpStatus.BAD_REQUEST,"Categoria inválida.");
-        var current=db.queryForList("select tier from film_ranking where actor=? and title=?",Integer.class,actor,title);
-        if((current.isEmpty() && tier==-1) || (!current.isEmpty() && current.getFirst().equals(tier)))return ranking(actor);
-        if(tier>=0) {
-            if(SEASON_ID.matcher(title).matches())fail(HttpStatus.BAD_REQUEST,"Temporadas não entram no ranking.");
-            if(episodic(title))fail(HttpStatus.BAD_REQUEST,"A categoria da série vem da média das temporadas.");
-            if(!exists("select count(*) from library where actor=? and title=? and watched=true",actor,title))
-                fail(HttpStatus.BAD_REQUEST,"Marque a obra como assistida para colocá-la no ranking.");
-            if(current.isEmpty() && db.queryForObject("select count(*) from film_ranking where actor=?",Integer.class,actor)>=100)
-                fail(HttpStatus.BAD_REQUEST,"Use até 100 obras.");
-        }
-        db.update("delete from film_ranking where actor=? and title=?",actor,title);
-        if(tier>=0) {
-            int position=db.queryForObject("select coalesce(max(position)+1,0) from film_ranking where actor=? and tier=?",Integer.class,actor,tier);
-            db.update("insert into film_ranking(actor,title,tier,position) values(?,?,?,?)",actor,title,tier,position);
-        }
-        db.update("update profile set ranking_version=ranking_version+1 where actor=?",actor);
-        return ranking(actor);
-    }
-
-    public record EpisodeRating(Integer rating) {}
-
-
-
-    @GetMapping("/me/episodes/{title}")
-    List<Map<String,Object>> mySeasonAverages(@RequestHeader("X-Actor") String actor,@PathVariable String title) {
-        active(actor);
-        validateTitle(title);
-        return db.queryForList("""
-            select season,sum(rating) as total,count(*) as votes
-            from episode_rating where actor=? and title=? group by season order by season
-            """,actor,title).stream().map(row->Map.<String,Object>of("season",row.get("season"),
-                "average",roundedEpisodeAverage(((Number)row.get("total")).longValue(),((Number)row.get("votes")).longValue())))
-            .toList();
-    }
-
-    @GetMapping("/me/episodes/{title}/{season}")
-
-    List<Map<String,Object>> episodeRatings(@RequestHeader("X-Actor") String actor,
-
-            @PathVariable String title,@PathVariable int season) {
-
-        active(actor);
-
-        return db.queryForList("select episode,rating from episode_rating where actor=? and title=? and season=?",actor,title,season);
-
-    }
-
-
-
-    @PutMapping("/me/episodes/{title}/{season}/{episode}")
-
-    @Transactional
-
-    void rateEpisode(@RequestHeader("X-Actor") String actor,@PathVariable String title,
-
-            @PathVariable int season,@PathVariable int episode,@RequestBody EpisodeRating input) {
-
-        lockActive(actor);
-
-        validateTitle(title);
-
-        if(EPISODE_ID.matcher(title).matches()||SEASON_ID.matcher(title).matches()||season<0||season>1000||episode<1||episode>999999999||input.rating()!=null&&(input.rating()<1||input.rating()>10))
-
-            fail(HttpStatus.BAD_REQUEST,"Episódio ou nota inválidos.");
-
-        if(!seasonEpisodes(title,season).contains(episode))fail(HttpStatus.NOT_FOUND,"Episódio não encontrado.");
-        String episodeId="ep-"+title+"-s"+season+"-e"+episode;
-        if(input.rating()!=null && !exists("select count(*) from library where actor=? and title=?",actor,episodeId)) {
-            createLibraryEntry(actor,episodeId,title);
-        }
-        db.update("update library set rating=? where actor=? and title=?",input.rating(),actor,episodeId);
-        if(input.rating()!=null)mark(actor,episodeId);
-        saveEpisodeRating(actor,title,season,episode,input.rating());
-    }
-
-    private Set<Integer> seasonEpisodes(String series,int season) {
-        validateTitle(series);
-        if(SEASON_ID.matcher(series).matches()||EPISODE_ID.matcher(series).matches()||season<0||season>1000)
-            fail(HttpStatus.BAD_REQUEST,"Temporada inválida.");
-        return catalogNumbers("/titles/"+series+"/seasons/"+season,"number",1,999999999);
-    }
-
-    private Set<Integer> catalogNumbers(String path,String field,int minimum,int maximum) {
-        try {
-            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+path))
-                .timeout(Duration.ofSeconds(5)).header("X-Internal-Key",catalogKey).GET().build(),HttpResponse.BodyHandlers.ofString());
-            if(response.statusCode()!=200)
-                fail(response.statusCode()==404?HttpStatus.NOT_FOUND:HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível consultar o catálogo da série.");
-            Set<Integer> numbers=new LinkedHashSet<>();
-            for(var item:mapper.readTree(response.body())) {
-                var value=item.path(field);
-                if(value.isIntegralNumber()&&value.canConvertToInt()&&value.asInt()>=minimum&&value.asInt()<=maximum)
-                    numbers.add(value.asInt());
-            }
-            return numbers;
-        } catch(InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-        } catch(java.io.IOException e) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
-        }
-    }
-
-    record SeasonProgress(int watched,int total,Double average,boolean rewatched,boolean complete) {}
-
-    @GetMapping("/me/season-progress/{series}/{season}")
-    SeasonProgress seasonProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series,@PathVariable int season) {
-        active(actor);
-        return seasonProgress(actor,series,season,seasonEpisodes(series,season));
-    }
-
-    @GetMapping("/me/series-progress/{series}")
-    Map<String,Boolean> seriesProgress(@RequestHeader("X-Actor") String actor,@PathVariable String series) {
-        active(actor);
-        validateTitle(series);
-        if(!episodic(series))fail(HttpStatus.BAD_REQUEST,"Série inválida.");
-        var seasons=catalogNumbers("/titles/"+series+"/seasons","number",0,1000);
-        if(seasons.isEmpty())return Map.of("complete",false);
-
-        String episodePrefix="ep-"+series+"-s";
-        var watched=watchedEpisodes(actor,episodePrefix);
-        var seasonPrefixes=seasons.stream().map(season->episodePrefix+season+"-e").toList();
-        if(seasonPrefixes.stream().anyMatch(prefix->watched.stream().noneMatch(id->id.startsWith(prefix))))
-            return Map.of("complete",false);
-
-        return Map.of("complete",seasons.stream().allMatch(season->
-            allEpisodesMatch(episodePrefix+season+"-e",seasonEpisodes(series,season),watched)));
-    }
-
-    private SeasonProgress seasonProgress(String actor,String series,int season,Set<Integer> episodes) {
-        String prefix="ep-"+series+"-s"+season+"-e";
-        var watched=watchedEpisodes(actor,prefix);
-        int count=(int)episodes.stream().filter(number->watched.contains(prefix+number)).count();
-        var ratings=db.queryForList("select rating from episode_rating where actor=? and title=? and season=?",Integer.class,actor,series,season);
-        boolean complete=!episodes.isEmpty()&&count==episodes.size();
-        return new SeasonProgress(count,episodes.size(),roundedEpisodeAverage(ratings.stream().mapToInt(Integer::intValue).sum(),ratings.size()),
-            seasonRewatched(actor,prefix,episodes),complete);
-    }
-
-    private boolean seasonRewatched(String actor,String prefix,Set<Integer> episodes) {
-        return allEpisodesMatch(prefix,episodes,repeatedViewings(actor,prefix));
-    }
-
-    private static boolean allEpisodesMatch(String prefix,Set<Integer> episodes,Set<String> eligible) {
-        return !episodes.isEmpty()&&episodes.stream().allMatch(number->eligible.contains(prefix+number));
-    }
-
-    private Set<String> repeatedViewings(String actor,String prefix) {
-        return new HashSet<>(db.queryForList("""
-            select title from viewing where actor=? and title like ?
-            group by title having count(*)>=2
-            """,String.class,actor,prefix+"%"));
-    }
-
-    private Set<String> watchedEpisodes(String actor,String prefix) {
-        return new HashSet<>(db.queryForList("select title from library where actor=? and watched=true and title like ?",String.class,actor,prefix+"%"));
-    }
-
-    private static Double roundedEpisodeAverage(long sum,long count) {
-        if(count==0)return null;
-        // As notas são inteiras de 1 a 10. No ponto médio, mantenha a meia estrela inferior.
-        return seasonHalfStars(sum,count)/2.0;
-    }
-
-    private static int seasonHalfStars(long sum,long count) {
-        return (int)((2*sum+count-1)/(2*count));
-    }
-
-    private static int seriesHalfStars(IntSummaryStatistics seasons) {
-        return (int)((seasons.getSum()+seasons.getCount()-1)/seasons.getCount());
-    }
-
-    private void saveEpisodeRating(String actor,String title,int season,int episode,Integer rating) {
-        db.update("delete from episode_rating where actor=? and title=? and season=? and episode=?",actor,title,season,episode);
-        if(rating!=null) {
-            db.update("insert into episode_rating values(?,?,?,?,?)",actor,title,season,episode,rating);
-            if(!exists("select count(*) from library where actor=? and title=?",actor,title))
-                db.update("insert into library(actor,title,evaluation_public,spoiler) values(?,?,true,false)",actor,title);
-            mark(actor,title);
-        }
-    }
 
     @GetMapping("/me") Map<String,Object> me(@RequestHeader("X-Actor") String actor, @RequestParam(defaultValue="false") boolean summary, @RequestParam(required=false) String title) {
 
@@ -405,7 +83,7 @@ public class Social {
         if (profiles.isEmpty()) return Map.of("needsProfile",true);
 
         if(!Boolean.TRUE.equals(profiles.getFirst().get("active")) && db.queryForObject("select count(*) from email_account where actor=? and state='paused'",Integer.class,actor)>0)return Map.of("paused",true);
-        checkActive(profiles.getFirst());
+        ActiveActors.checkActive(profiles.getFirst());
 
         if (title != null) validateTitle(title);
         return dashboard(profiles.getFirst(),actor,true,summary,title);
@@ -435,7 +113,7 @@ public class Social {
 
             if (count==0) {
 
-                if (exists("select count(*) from profile where actor=?",actor)) fail(HttpStatus.FORBIDDEN,"Acesso suspenso.");
+                if (Rows.exists(db,"select count(*) from profile where actor=?",actor)) fail(HttpStatus.FORBIDDEN,"Acesso suspenso.");
 
 
 
@@ -460,9 +138,9 @@ public class Social {
 
     Map<String,Object> publicProfile(@RequestHeader("X-Actor") String actor,@PathVariable String username, @RequestParam(defaultValue="false") boolean summary) {
 
-        active(actor);
+        actors.requireActive(actor);
 
-        var target=one("select actor,username,name,bio,avatar from profile where username=? and active=true",ProfileFields.username(username));
+        var target=Rows.one(db,"select actor,username,name,bio,avatar from profile where username=? and active=true",ProfileFields.username(username));
 
         return dashboard(target,(String)target.get("actor"),false,summary,null);
 
@@ -474,10 +152,10 @@ public class Social {
 
     List<Map<String,Object>> reviews(@RequestHeader("X-Actor") String actor,@PathVariable String id) {
 
-        active(actor);
+        actors.requireActive(actor);
 
         validateTitle(id);
-        return publicReviews(actor,id,episodic(id)||SEASON_ID.matcher(id).matches());
+        return publicReviews(actor,id,entries.episodic(id)||SEASON_ID.matcher(id).matches());
     }
 
     private static final String EFFECTIVE_SPOILER = """
@@ -524,16 +202,16 @@ public class Social {
     record SpoilerVote(String username, Integer version, Boolean containsSpoiler) {}
     @PutMapping("/titles/{id}/spoiler-vote") @Transactional
     Map<String,Object> voteSpoiler(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody SpoilerVote input) {
-        lockActive(actor);
+        actors.lockActive(actor);
         validateTitle(id);
         if(input.containsSpoiler()==null || input.version()==null)fail(HttpStatus.BAD_REQUEST,"Informe o voto e a versão da resenha.");
-        String author=(String)one("select actor from profile where username=? and active=true",ProfileFields.username(input.username())).get("actor");
+        String author=(String)Rows.one(db,"select actor from profile where username=? and active=true",ProfileFields.username(input.username())).get("actor");
         if(author.equals(actor))fail(HttpStatus.FORBIDDEN,"Você só pode votar em resenhas de outras pessoas.");
-        var review=one("select version from library where actor=? and title=? and review is not null and evaluation_public and not hidden for update",author,id);
+        var review=Rows.one(db,"select version from library where actor=? and title=? and review is not null and evaluation_public and not hidden for update",author,id);
         if(!input.version().equals(review.get("version")))fail(HttpStatus.CONFLICT,"A resenha mudou. Atualize a página antes de votar.");
         if(db.update("update review_spoiler_vote set contains_spoiler=? where author=? and title=? and voter=?",input.containsSpoiler(),author,id,actor)==0)
             db.update("insert into review_spoiler_vote(author,title,voter,contains_spoiler) values(?,?,?,?)",author,id,actor,input.containsSpoiler());
-        return one("select "+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote from library l where l.actor=? and l.title=?",actor,author,id);
+        return Rows.one(db,"select "+EFFECTIVE_SPOILER+" as spoiler,"+MY_SPOILER_VOTE+" as my_vote from library l where l.actor=? and l.title=?",actor,author,id);
     }
 
     private static final Set<String> REPORT_REASONS=Set.of("spoiler","harassment","hate","spam","inappropriate","off_topic","other");
@@ -542,20 +220,20 @@ public class Social {
 
     @PostMapping("/titles/{id}/review-report") @Transactional
     Map<String,Boolean> reportReview(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody ReviewReport input) {
-        active(actor);
+        actors.requireActive(actor);
         validateTitle(id);
         String details=optional(input.details(),500);
         if(input.version()==null||input.version()<0||input.reason()==null||!REPORT_REASONS.contains(input.reason())
             || ("other".equals(input.reason())&&details.isBlank()))
             fail(HttpStatus.BAD_REQUEST,"Escolha um motivo e descreva o problema ao selecionar Outro.");
-        String author=(String)one("select actor from profile where username=? and active=true",ProfileFields.username(input.username())).get("actor");
+        String author=(String)Rows.one(db,"select actor from profile where username=? and active=true",ProfileFields.username(input.username())).get("actor");
         if(author.equals(actor))fail(HttpStatus.FORBIDDEN,"Você só pode reportar resenhas de outras pessoas.");
         db.queryForList("select actor from profile where actor in (?,?) order by actor for update",actor,author);
-        active(actor);
-        active(author);
-        if(exists("select count(*) from review_report where reporter=? and author=? and title=? and review_version=?",actor,author,id,input.version()))
+        actors.requireActive(actor);
+        actors.requireActive(author);
+        if(Rows.exists(db,"select count(*) from review_report where reporter=? and author=? and title=? and review_version=?",actor,author,id,input.version()))
             return Map.of("reported",true);
-        var review=one("select version,review from library where actor=? and title=? and review is not null and evaluation_public and not hidden for update",author,id);
+        var review=Rows.one(db,"select version,review from library where actor=? and title=? and review is not null and evaluation_public and not hidden for update",author,id);
         if(!input.version().equals(review.get("version")))
             fail(HttpStatus.CONFLICT,"A resenha mudou. Atualize a página antes de reportar.");
         if(db.queryForObject("select count(*) from review_report where reporter=? and created>?",Integer.class,actor,OffsetDateTime.now().minusDays(1))>=10)
@@ -565,17 +243,14 @@ public class Social {
         return Map.of("reported",true);
     }
 
-    private boolean episodic(String id) {
-        return id.startsWith("tmdb-tv-") || (id.startsWith("demo-") && "tv".equals(verifyTitle(id)));
-    }
 
     @GetMapping("/titles/{id}/community")
     Map<String,Object> community(@RequestHeader("X-Actor") String actor,@PathVariable String id) {
-        active(actor);
+        actors.requireActive(actor);
         validateTitle(id);
         var seasonKey=SEASON_ID.matcher(id);
         boolean season=seasonKey.matches();
-        boolean series=episodic(id);
+        boolean series=entries.episodic(id);
         Map<String,Object> result;
         if(season) {
             var totals=db.queryForMap("""
@@ -589,7 +264,7 @@ public class Social {
                 """,seasonKey.group(1),Integer.parseInt(seasonKey.group(2)));
             result=new HashMap<>(totals);
             long sum=((Number)result.remove("total")).longValue();
-            result.put("average",roundedEpisodeAverage(sum,((Number)result.get("episode_rating_count")).longValue()));
+            result.put("average",Episodes.roundedEpisodeAverage(sum,((Number)result.get("episode_rating_count")).longValue()));
         } else if(series) {
             var publicEpisodes=db.queryForList("""
                 select e.actor,e.season,e.rating from episode_rating e
@@ -607,12 +282,12 @@ public class Social {
                     .accept((Integer)episode.get("rating"));
             }
             var seasons=bySeason.entrySet().stream().map(item->Map.<String,Object>of(
-                "season",item.getKey(),"average",roundedEpisodeAverage(item.getValue().getSum(),item.getValue().getCount()))).toList();
-            var scores=bySeason.values().stream().mapToInt(stats->seasonHalfStars(stats.getSum(),stats.getCount())).summaryStatistics();
+                "season",item.getKey(),"average",Episodes.roundedEpisodeAverage(item.getValue().getSum(),item.getValue().getCount()))).toList();
+            var scores=bySeason.values().stream().mapToInt(stats->Episodes.seasonHalfStars(stats.getSum(),stats.getCount())).summaryStatistics();
             result=new HashMap<>();
             result.put("rating_count",viewers.size());
             result.put("episode_rating_count",publicEpisodes.size());
-            result.put("average",scores.getCount()==0?null:seriesHalfStars(scores)/2.0);
+            result.put("average",scores.getCount()==0?null:Episodes.seriesHalfStars(scores)/2.0);
             result.put("seasons",seasons);
         } else {
             result=new HashMap<>(db.queryForMap("""
@@ -625,232 +300,17 @@ public class Social {
         return result;
     }
 
-    @PutMapping("/me/library/{id}/{action}")
-
-    @Transactional
-
-    Map<String,Object> library(@RequestHeader("X-Actor") String actor,@PathVariable String id,@PathVariable String action,@RequestBody LibraryChange input) {
-
-        lockActive(actor);
-
-        if(SEASON_ID.matcher(id).matches()&&Set.of("watched","rating","rewatching").contains(action))
-            fail(HttpStatus.BAD_REQUEST,"A nota e o progresso da temporada vêm dos episódios.");
-        ensureLibrary(actor,id);
-
-        var old=one("select * from library where actor=? and title=?",actor,id);
-
-        switch(action) {
-
-            case "watched" -> {
-
-                if (input.value()==null) fail(HttpStatus.BAD_REQUEST,"Informe o estado.");
-
-                if (input.value()) {
-                    recordFirstViewing(actor,id,OffsetDateTime.now(DIARY_ZONE));
-                    syncEpisodeSeason(actor,id);
-                }
-
-                else if (!input.value()) {
-
-                    db.update("update library set watched=false,rewatching=false where actor=? and title=?",actor,id);
-                    syncEpisodeSeason(actor,id);
-
-                    if(db.update("delete from film_ranking where actor=? and title=?",actor,id)>0)
-
-                        db.update("update profile set ranking_version=ranking_version+1 where actor=?",actor);
-
-                }
-
-            }
-
-            case "interest" -> {
-
-                if (input.value()==null) fail(HttpStatus.BAD_REQUEST,"Informe o estado.");
-
-                if(input.value() && Boolean.TRUE.equals(old.get("watched")))
-                    fail(HttpStatus.CONFLICT,"A obra já está marcada como assistida.");
-                db.update("update library set interest=? where actor=? and title=?",input.value(),actor,id);
-
-            }
-
-            case "rewatching" -> {
-
-                if(input.value()==null) fail(HttpStatus.BAD_REQUEST,"Informe o estado.");
-
-                db.update("update library set rewatching=? where actor=? and title=?",input.value(),actor,id);
-
-                if(input.value()) mark(actor,id);
-
-            }
-
-            case "rating" -> {
-                if(episodic(id))fail(HttpStatus.BAD_REQUEST,"Avalie os episódios para calcular a nota da série.");
-
-                Integer value=input.rating();
-
-                if (value!=null && (value<1 || value>10)) fail(HttpStatus.BAD_REQUEST,"Nota fora da escala.");
-
-                db.update("update library set rating=? where actor=? and title=?",value,actor,id);
-
-                if (value!=null) mark(actor,id);
-                var episodeKey=EPISODE_ID.matcher(id);
-                if(episodeKey.matches())saveEpisodeRating(actor,episodeKey.group(1),
-                    Integer.parseInt(episodeKey.group(2)),Integer.parseInt(episodeKey.group(3)),value);
-
-            }
-
-            case "visibility" -> {
-                if(input.value()==null)fail(HttpStatus.BAD_REQUEST,"Informe a visibilidade da avaliação.");
-                db.update("update library set evaluation_public=? where actor=? and title=?",input.value(),actor,id);
-            }
-            case "review" -> {
-
-                String review=optional(input.review(),3000);
-
-                if (input.version()==null || !input.version().equals(old.get("version"))) {
-                    boolean alreadySaved=input.version()!=null && input.version()==((Integer)old.get("version"))-1
-                        && Objects.equals(review.isBlank()?null:review,old.get("review"))
-                        && Objects.equals(Boolean.TRUE.equals(input.spoiler()),old.get("spoiler"));
-                    if(alreadySaved)break;
-                    fail(HttpStatus.CONFLICT,"Resenha alterada. Atualize a página.");
-                }
-
-                db.update("update library set review_published_at=case when ? then null when review is null then CURRENT_TIMESTAMP else review_published_at end,review=?,spoiler=?,version=version+1 where actor=? and title=?",review.isBlank(),review.isBlank()?null:review,Boolean.TRUE.equals(input.spoiler()),actor,id);
-
-                if (!Objects.equals(review.isBlank()?null:review,old.get("review")))
-                    db.update("delete from review_spoiler_vote where author=? and title=?",actor,id);
-
-                if (!review.isBlank() && old.get("review")==null) {
-
-                    mark(actor,id);
-
-                    if (!Boolean.TRUE.equals(old.get("rewatching")) &&
-
-                            !exists("select count(*) from viewing where actor=? and title=?",actor,id)) {
-
-                        OffsetDateTime watchedAt=OffsetDateTime.now(DIARY_ZONE);
-
-                        insertViewing(actor,id,watchedAt.toLocalDate(),false,watchedAt);
-
-                    }
-
-                }
-
-            }
-
-            default -> fail(HttpStatus.NOT_FOUND,"Ação desconhecida.");
-
-        }
-
-        return one("select title,watched,interest,rewatching,rating,review,spoiler,hidden,version,evaluation_public from library where actor=? and title=?",actor,id);
-
-    }
-
-
-
-    @PostMapping("/me/viewings")
-
-    @Transactional
-
-    Map<String,String> createViewing(@RequestHeader("X-Actor") String actor,@RequestHeader("Idempotency-Key") String key,@RequestBody Viewing input) {
-
-        lockActive(actor);
-
-        LocalDate date=input.watchedAt()==null?input.date():input.watchedAt().atZoneSameInstant(DIARY_ZONE).toLocalDate();
-
-        checkDate(date);
-
-        String prior=receipt(actor,"viewing",key,input);
-
-        if (prior!=null) return Map.of("id",prior);
-
-        ensureLibrary(actor,input.title());
-
-        var seasonKey=SEASON_ID.matcher(input.title());
-        boolean canRewatch;
-        if(seasonKey.matches()) {
-            String series=seasonKey.group(1);
-            int season=Integer.parseInt(seasonKey.group(2));
-            canRewatch=seasonRewatched(actor,"ep-"+series+"-s"+season+"-e",seasonEpisodes(series,season));
-        } else {
-            canRewatch=exists("select count(*) from library where actor=? and title=? and rewatching=true",actor,input.title());
-        }
-        if(!input.rewatch()||!canRewatch)
-            fail(HttpStatus.CONFLICT,seasonKey.matches()?"Registre duas sessões de cada episódio primeiro.":"Marque Vi novamente para registrar outra sessão.");
-
-        String id=insertViewing(actor,input.title(),date,true,input.watchedAt());
-
-        mark(actor,input.title());
-
-        saveReceipt(actor,"viewing",key,input,id);
-
-        return Map.of("id",id);
-
-    }
-
-
-
-    private String insertViewing(String actor,String title,LocalDate date,boolean rewatch,OffsetDateTime watchedAt) {
-
-        String id=UUID.randomUUID().toString();
-
-        db.update("insert into viewing(id,actor,title,watched_on,rewatch,watched_at) values(?,?,?,?,?,?)",
-
-            id,actor,title,date,rewatch,watchedAt);
-
-        return id;
-
-    }
-
-
-
-    @PutMapping("/me/viewings/{id}")
-
-    @Transactional
-
-    void editViewing(@RequestHeader("X-Actor") String actor,@PathVariable String id,@RequestBody Viewing input) {
-
-        lockActive(actor); checkDate(input.date());
-
-        if (db.update("""
-
-                update viewing set watched_at=case when watched_on=? then watched_at else null end,
-
-                watched_on=?,rewatch=? where id=? and actor=?
-
-                """,input.date(),input.date(),input.rewatch(),id,actor)==0)
-
-            fail(HttpStatus.NOT_FOUND,"Registro não encontrado.");
-
-    }
-
-
-
-    @DeleteMapping("/me/viewings/{id}")
-
-    @Transactional
-
-    void deleteViewing(@RequestHeader("X-Actor") String actor,@PathVariable String id) {
-
-        lockActive(actor);
-
-        if (db.update("delete from viewing where id=? and actor=?",id,actor)==0) fail(HttpStatus.NOT_FOUND,"Registro não encontrado.");
-
-    }
-
-
-
     record ProfileVisibility(String section,Boolean visible) {}
     @PutMapping("/me/visibility") @Transactional
     Map<String,Object> visibility(@RequestHeader("X-Actor") String actor,@RequestBody ProfileVisibility input){
-        lockActive(actor);
+        actors.lockActive(actor);
         if(input.visible()==null||input.section()==null||!Set.of("all","watchlist","ranking","watched","diary").contains(input.section()))fail(HttpStatus.BAD_REQUEST,"Seção inválida.");
         if(input.section().equals("all"))db.update("update profile set show_watchlist=?,show_ranking=?,show_watched=?,show_diary=? where actor=?",input.visible(),input.visible(),input.visible(),input.visible(),actor);
         else db.update("update profile set show_"+input.section()+"=? where actor=?",input.visible(),actor);
         return profileVisibility(actor);
     }
     private Map<String,Object> profileVisibility(String actor){
-        var row=one("select show_watchlist,show_ranking,show_watched,show_diary from profile where actor=?",actor);
+        var row=Rows.one(db,"select show_watchlist,show_ranking,show_watched,show_diary from profile where actor=?",actor);
         var result=new LinkedHashMap<String,Object>();
         for(String section:List.of("watchlist","ranking","watched","diary"))result.put(section,row.get("show_"+section));
         return result;
@@ -874,11 +334,11 @@ public class Social {
     @GetMapping("/diary")
     DiaryPage diary(@RequestHeader("X-Actor") String actor, @RequestParam int page,
                     @RequestParam(required=false) String username, @RequestParam(required=false) String title) {
-        active(actor);
+        actors.requireActive(actor);
         if (page < 1) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         if (title != null) validateTitle(title);
         if (username == null) return diaryPage(actor, page, title);
-        var target = one("select actor from profile where username=? and active=true", ProfileFields.username(username));
+        var target = Rows.one(db,"select actor from profile where username=? and active=true", ProfileFields.username(username));
         String owner = (String)target.get("actor");
         if (!Boolean.TRUE.equals(profileVisibility(owner).get("diary")))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
@@ -887,7 +347,7 @@ public class Social {
 
     @GetMapping("/notifications")
     Map<String,Object> notifications(@RequestHeader("X-Actor") String actor) {
-        active(actor);
+        actors.requireActive(actor);
         var items=db.queryForList("""
                 select kind,target,label,sender,count(*) over() as total from (
                     select 'friend' as kind,p.username as target,p.name as label,p.name as sender,f.created
@@ -911,7 +371,7 @@ public class Social {
 
     @PutMapping("/notifications/rooms/{id}/read")
     Map<String,Boolean> readRoomNotice(@RequestHeader("X-Actor") String actor,@PathVariable String id){
-        active(actor);
+        actors.requireActive(actor);
         db.update("update room_end_notice set seen=true where room=? and recipient=? and visible_at<=CURRENT_TIMESTAMP",id,actor);
         return Map.of("read",true);
     }
@@ -919,13 +379,13 @@ public class Social {
     @GetMapping("/library-page")
     Map<String,Object> libraryPage(@RequestHeader("X-Actor") String actor, @RequestParam String section,
                                    @RequestParam int page, @RequestParam(required=false) String username) {
-        active(actor);
+        actors.requireActive(actor);
         if (page < 1 || !Set.of("watched","watchlist").contains(section))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         String owner = actor;
         boolean visitor = username != null;
         if (visitor) {
-            owner = (String)one("select actor from profile where username=? and active=true", ProfileFields.username(username)).get("actor");
+            owner = (String)Rows.one(db,"select actor from profile where username=? and active=true", ProfileFields.username(username)).get("actor");
             if (!Boolean.TRUE.equals(profileVisibility(owner).get(section)))
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
@@ -968,157 +428,10 @@ public class Social {
         }
         var ranking=new ArrayList<Map<String,Object>>();
         if(own||Boolean.TRUE.equals(visibility.get("ranking"))) {
-            ranking.addAll(manualRanking(actor));
-            ranking.addAll(seriesRanking(actor,!own));
+            ranking.addAll(rankings.manualRanking(actor));
+            ranking.addAll(rankings.seriesRanking(actor,!own));
         }
         return Map.of("profile",Map.of("username",profile.get("username"),"name",profile.get("name"),"bio",profile.get("bio"),"avatar",Objects.toString(profile.get("avatar"),"")),"library",library,"viewings",diary.items(),"diaryHasMore",diary.hasMore(),"ranking",ranking,"visibility",visibility);
     }
-
-    private void ensureLibrary(String actor,String id) {
-
-        validateTitle(id);
-
-        if (!exists("select count(*) from library where actor=? and title=?",actor,id)) {
-
-            verifyTitle(id);
-
-            db.update("insert into library(actor,title,evaluation_public,spoiler) values(?,?,true,false)",actor,id);
-
-        }
-
-    }
-
-
-
-    private void createLibraryEntry(String actor,String id,String seriesId) {
-        boolean visible=seriesId==null || !exists(
-            "select count(*) from library where actor=? and title=? and (not evaluation_public or hidden)",actor,seriesId);
-        db.update("insert into library(actor,title,evaluation_public,spoiler) values(?,?,?,false)",actor,id,visible);
-    }
-
-    private String verifyTitle(String id) {
-
-        validateTitle(id);
-
-        try {
-
-            var response=http.send(HttpRequest.newBuilder(URI.create(catalog+"/titles/"+id)).timeout(Duration.ofSeconds(3))
-
-                .header("X-Internal-Key",catalogKey).GET().build(),HttpResponse.BodyHandlers.ofString());
-
-            int status=response.statusCode();
-
-            if (status==404) fail(HttpStatus.NOT_FOUND,"Obra não encontrada.");
-
-            if (status!=200) fail(HttpStatus.SERVICE_UNAVAILABLE,"Catálogo indisponível.");
-
-            return mapper.readTree(response.body()).path("format").asText();
-
-        } catch (InterruptedException interrupted) {
-
-            Thread.currentThread().interrupt(); fail(HttpStatus.SERVICE_UNAVAILABLE,"Consulta interrompida.");
-
-        } catch (java.io.IOException failure) { fail(HttpStatus.SERVICE_UNAVAILABLE,"Catálogo indisponível."); }
-
-        throw new IllegalStateException("Catálogo indisponível.");
-
-    }
-
-
-
-    private void mark(String actor,String id) {
-        if(SEASON_ID.matcher(id).matches())return;
-        db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
-        syncEpisodeSeason(actor,id);
-    }
-
-    private void recordFirstViewing(String actor,String id,OffsetDateTime now) {
-        db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
-        if(!exists("select count(*) from viewing where actor=? and title=?",actor,id))
-            insertViewing(actor,id,now.toLocalDate(),false,now);
-    }
-
-    private void syncEpisodeSeason(String actor,String id) {
-        var key=EPISODE_ID.matcher(id);
-        if(key.matches())syncSeasonWatched(actor,key.group(1),Integer.parseInt(key.group(2)));
-    }
-
-    private void syncSeasonWatched(String actor,String series,int season) {
-        String id="season-"+series+"-s"+season;
-        boolean watched=exists("select count(*) from library where actor=? and watched=true and title like ?",
-            actor,"ep-"+series+"-s"+season+"-e%");
-        if(watched) {
-            if(!exists("select count(*) from library where actor=? and title=?",actor,id))createLibraryEntry(actor,id,series);
-            db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
-        } else {
-            db.update("update library set watched=false,rewatching=false where actor=? and title=?",actor,id);
-        }
-    }
-
-    private void active(String actor) { validateActor(actor); checkActive(one("select active from profile where actor=?",actor)); }
-
-    private void lockActive(String actor) { validateActor(actor); checkActive(one("select active from profile where actor=? for update",actor)); }
-
-    private static void checkActive(Map<String,Object> row) { if(!Boolean.TRUE.equals(row.get("active"))) fail(HttpStatus.FORBIDDEN,"Acesso suspenso."); }
-
-
-
-    private String receipt(String actor,String action,String key,Object body) {
-
-        if (key==null || !key.matches("[A-Za-z0-9_-]{8,80}")) fail(HttpStatus.BAD_REQUEST,"Chave de repetição inválida.");
-
-        db.update("delete from request_receipt where actor=? and created<?",actor,OffsetDateTime.now(ZoneOffset.UTC).minusHours(24));
-
-        var rows=db.queryForList("select body_hash,resource_id from request_receipt where actor=? and action=? and request_key=?",actor,action,key);
-
-        if(rows.isEmpty()) return null;
-
-        if(!hash(body).equals(rows.getFirst().get("body_hash"))) fail(HttpStatus.CONFLICT,"Chave já usada com outros dados.");
-
-        return (String)rows.getFirst().get("resource_id");
-
-    }
-
-    private void saveReceipt(String actor,String action,String key,Object body,String id) {
-
-        db.update("insert into request_receipt(actor,action,request_key,body_hash,resource_id) values(?,?,?,?,?)",actor,action,key,hash(body),id);
-
-    }
-
-    private String hash(Object body) {
-
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(mapper.writeValueAsBytes(body))); }
-
-        catch (java.security.NoSuchAlgorithmException | com.fasterxml.jackson.core.JsonProcessingException failure) { throw new IllegalStateException(failure); }
-
-    }
-
-
-
-    private boolean exists(String sql,Object... args) { return db.queryForObject(sql,Integer.class,args)>0; }
-
-    private Map<String,Object> one(String sql,Object... args) {
-
-        var rows=db.queryForList(sql,args);
-
-        if(rows.isEmpty()) fail(HttpStatus.NOT_FOUND,"Registro não encontrado.");
-
-        return rows.getFirst();
-
-    }
-
-    private static void validateActor(String actor) { if(actor==null || !actor.matches("[A-Za-z0-9_-]{8,160}")) fail(HttpStatus.UNAUTHORIZED,"Sessão inválida."); }
-
-    private static final java.util.regex.Pattern EPISODE_ID=java.util.regex.Pattern.compile("ep-((?:demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12}))-s(0|[1-9][0-9]{0,2}|1000)-e([1-9][0-9]{0,8})");
-    private static final java.util.regex.Pattern SEASON_ID=java.util.regex.Pattern.compile("season-(demo-[a-z0-9-]{1,60}|tmdb-tv-[1-9][0-9]{0,12})-s(0|[1-9][0-9]{0,2}|1000)");
-    private static void validateTitle(String id) { if(id==null || (!id.matches("demo-[a-z0-9-]{1,60}|tmdb-(movie|tv)-[1-9][0-9]{0,12}") && !EPISODE_ID.matcher(id).matches() && !SEASON_ID.matcher(id).matches())) fail(HttpStatus.BAD_REQUEST,"Identificador inválido."); }
-
-    private static void checkDate(LocalDate date) { if(date!=null && date.isAfter(LocalDate.now(DIARY_ZONE))) fail(HttpStatus.BAD_REQUEST,"A data não pode estar no futuro."); }
-
-    private static String required(String value,int limit) { String result=optional(value,limit); if(result.isBlank()) fail(HttpStatus.BAD_REQUEST,"Campo obrigatório."); return result; }
-
-    private static String optional(String value,int limit) { String result=value==null?"":value.strip(); if(result.length()>limit) fail(HttpStatus.BAD_REQUEST,"Texto acima do limite de "+limit+" caracteres."); return result; }
-
-    private static void fail(HttpStatus status,String message) { throw new ResponseStatusException(status,message); }
 
 }

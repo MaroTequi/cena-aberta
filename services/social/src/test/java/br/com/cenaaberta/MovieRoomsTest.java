@@ -33,7 +33,7 @@ class MovieRoomsTest {
             String json="{\"items\":[{\"id\":\"tmdb-movie-"+page+"\",\"format\":\"movie\",\"name\":\"Suggestion\"}],\"nextPage\":"+(page+2)+"}";
             byte[] bytes=json.getBytes(StandardCharsets.UTF_8);exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
         });server.start();
-        rooms=new MovieRooms(db,new ObjectMapper(),"internal-key","catalog-key","http://127.0.0.1:"+server.getAddress().getPort());
+        rooms=new MovieRooms(db,new ObjectMapper(),"catalog-key","http://127.0.0.1:"+server.getAddress().getPort());
     }
     @AfterEach void close(){server.stop(0);}
     void watch(String actor,String title){db.update("insert into library(actor,title,interest) values(?,?,true)",actor,title);}
@@ -160,10 +160,9 @@ class MovieRoomsTest {
         assertThrows(ResponseStatusException.class,()->rooms.state("a",id));
         assertTrue(rooms.mine("a").isEmpty());
     }
-    @Test void requiresInternalAuthenticationAndActiveProfile(){
+    @Test void requiresActiveProfile(){
         var request=new MockHttpServletRequest();request.addHeader("X-Actor","a");
-        assertThrows(ResponseStatusException.class,()->rooms.verify(request));
-        request.addHeader("X-Internal-Key","internal-key");rooms.verify(request);
+        rooms.verify(request);
         db.update("update profile set active=false where actor='a'");
         assertThrows(ResponseStatusException.class,()->rooms.verify(request));
     }

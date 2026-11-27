@@ -1,9 +1,6 @@
 package br.com.cenaaberta;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,11 +10,10 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController @RequestMapping("/friends")
 public class Friends {
  record Invitation(String username) {} record Decision(String action) {}
- private final JdbcTemplate db; private final String secret;
- Friends(JdbcTemplate db,@Value("${internal.secret}") String secret){this.db=db;this.secret=secret;}
+ private final JdbcTemplate db;
+ Friends(JdbcTemplate db){this.db=db;}
  @ModelAttribute void verify(HttpServletRequest request){
-  String key=request.getHeader("X-Internal-Key"),actor=request.getHeader("X-Actor");
-  if(key==null||!MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),key.getBytes(StandardCharsets.UTF_8)))fail(HttpStatus.UNAUTHORIZED);
+  String actor=request.getHeader("X-Actor");
   if(actor==null||db.queryForObject("select count(*) from profile where actor=? and active=true",Integer.class,actor)!=1)fail(HttpStatus.FORBIDDEN);
  }
  private void fail(HttpStatus status){throw new ResponseStatusException(status);}

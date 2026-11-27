@@ -42,7 +42,7 @@ class LetterboxdImportTest {
   var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
   server.createContext("/title-batch",e->{byte[] b="[{\"id\":\"tmdb-movie-777\",\"format\":\"movie\"}]".getBytes(StandardCharsets.UTF_8);e.sendResponseHeaders(200,b.length);e.getResponseBody().write(b);e.close();});server.start();
   try{
-   var service=new LetterboxdImport(db,new ObjectMapper(),"secret","http://127.0.0.1:"+server.getAddress().getPort(),"catalog-key");
+   var service=new LetterboxdImport(db,new ObjectMapper(),"http://127.0.0.1:"+server.getAddress().getPort(),"catalog-key");
    var rows=List.of(new LetterboxdImport.Row("diary","Movie","2024",10,"Imported","2025-01-01",false,"",1,"tmdb-movie-777"),new LetterboxdImport.Row("watchlist","Movie","2024",null,"","",false,"",1,"tmdb-movie-777"));
    assertEquals(1,service.commit("a",new LetterboxdImport.Batch(rows)).get("imported"));
    assertEquals(2,service.commit("a",new LetterboxdImport.Batch(rows)).get("skipped"));

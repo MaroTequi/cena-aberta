@@ -2,8 +2,6 @@ package br.com.cenaaberta;
 
 import java.net.URI;
 import java.net.http.*;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.*;
 import java.util.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,16 +30,13 @@ public class MovieRooms {
     }
     private final JdbcTemplate db;
     private final ObjectMapper mapper;
-    private final String secret,catalogKey,catalog;
+    private final String catalogKey,catalog;
     private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
-    MovieRooms(JdbcTemplate db,ObjectMapper mapper,@Value("${internal.secret}") String secret,
-        @Value("${CATALOG_INTERNAL_SECRET}") String catalogKey,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog) {
-        this.db=db;this.mapper=mapper;this.secret=secret;this.catalogKey=catalogKey;this.catalog=catalog;
+    MovieRooms(JdbcTemplate db,ObjectMapper mapper,@Value("${CATALOG_INTERNAL_SECRET}") String catalogKey,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog) {
+        this.db=db;this.mapper=mapper;this.catalogKey=catalogKey;this.catalog=catalog;
     }
     @ModelAttribute
     void verify(HttpServletRequest request) {
-        String key=request.getHeader("X-Internal-Key");
-        if(key==null||!MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),key.getBytes(StandardCharsets.UTF_8)))fail(HttpStatus.UNAUTHORIZED,"Acesso interno necessário.");
         active(request.getHeader("X-Actor"));
     }
     private void active(String actor) {

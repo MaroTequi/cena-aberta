@@ -12,7 +12,7 @@ class FriendsTest {
  @BeforeEach void setup(){
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
  new ResourceDatabasePopulator(new ClassPathResource("db/migration/V1__social.sql"),new ClassPathResource("db/migration/V3__profile_cpf_avatar.sql"),new ClassPathResource("db/migration/V15__friendships.sql")).execute(source);
- db=new JdbcTemplate(source);for(String a:List.of("ana","bia","caio"))db.update("insert into profile(actor,username,name) values(?,?,?)",a,a,a);service=new Friends(db,"secret");
+ db=new JdbcTemplate(source);for(String a:List.of("ana","bia","caio"))db.update("insert into profile(actor,username,name) values(?,?,?)",a,a,a);service=new Friends(db);
  }
  @Test void consentPermissionsAndDuplicateRequests(){
  String id=service.invite("ana",new Friends.Invitation("bia")).get("id");

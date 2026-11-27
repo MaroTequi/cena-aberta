@@ -8,7 +8,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import jakarta.mail.internet.InternetAddress;
-import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +32,6 @@ class EmailAccounts {
     private final BCryptPasswordEncoder encoder=new BCryptPasswordEncoder(12);
     private final SecureRandom random=new SecureRandom();
     private final String dummy=encoder.encode(UUID.randomUUID().toString());
-    private final byte[] secret;
     private final String mode, front, from;
     private final boolean inviteOnly;
     private final Set<String> invitedEmails;
@@ -41,10 +39,10 @@ class EmailAccounts {
     private int requests;
 
     EmailAccounts(JdbcTemplate db,ObjectProvider<JavaMailSender> mail,
-        @Value("${internal.secret}") String secret,@Value("${EMAIL_MODE:disabled}") String mode,
+        @Value("${EMAIL_MODE:disabled}") String mode,
         @Value("${FRONTEND_URL:http://localhost:3000}") String front,@Value("${MAIL_FROM:}") String from,
         @Value("${INVITE_ONLY:false}") boolean inviteOnly,@Value("${INVITED_EMAILS:}") String invitedEmails) {
-        this.db=db; this.mail=mail.getIfAvailable(); this.secret=secret.getBytes(StandardCharsets.UTF_8);
+        this.db=db; this.mail=mail.getIfAvailable();
         this.mode=mode; this.front=front.replaceAll("/$",""); this.from=from;
         this.inviteOnly=inviteOnly;
         var invitations=new HashSet<String>();
@@ -63,13 +61,6 @@ class EmailAccounts {
                 (mode.equals("log") && !local) || (mode.equals("smtp") && (this.mail==null || from.isBlank())))
                 throw new IllegalArgumentException("Confira FRONTEND_URL, MAIL_FROM e SMTP_HOST");
         }
-    }
-
-    @ModelAttribute
-    void guard(HttpServletRequest request) {
-        String key=request.getHeader("X-Internal-Key");
-        if(key==null || !MessageDigest.isEqual(secret,key.getBytes(StandardCharsets.UTF_8)))
-            throw error(HttpStatus.UNAUTHORIZED,"Acesso interno necessário.");
     }
 
     @PostMapping("/{purpose:register|reset}")

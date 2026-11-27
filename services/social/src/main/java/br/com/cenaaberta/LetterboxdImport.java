@@ -27,12 +27,11 @@ public class LetterboxdImport {
     record Batch(List<Row> rows,Set<Integer> keepPublic) {
         Batch(List<Row> rows){this(rows,Set.of());}
     }
-    private final JdbcTemplate db;private final ObjectMapper mapper;private final String secret,catalog,catalogKey;
-    LetterboxdImport(JdbcTemplate db,ObjectMapper mapper,@Value("${internal.secret}") String secret,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog,@Value("${CATALOG_INTERNAL_SECRET}") String catalogKey){this.db=db;this.mapper=mapper;this.secret=secret;this.catalog=catalog;this.catalogKey=catalogKey;}
+    private final JdbcTemplate db;private final ObjectMapper mapper;private final String catalog,catalogKey;
+    LetterboxdImport(JdbcTemplate db,ObjectMapper mapper,@Value("${CATALOG_URL:http://127.0.0.1:8181}") String catalog,@Value("${CATALOG_INTERNAL_SECRET}") String catalogKey){this.db=db;this.mapper=mapper;this.catalog=catalog;this.catalogKey=catalogKey;}
     static void bad(String message){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,message);}
     @ModelAttribute void verify(HttpServletRequest request){
-        String key=request.getHeader("X-Internal-Key"),actor=request.getHeader("X-Actor");
-        if(key==null||!MessageDigest.isEqual(secret.getBytes(StandardCharsets.UTF_8),key.getBytes(StandardCharsets.UTF_8)))throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        String actor=request.getHeader("X-Actor");
         if(actor==null||db.queryForObject("select count(*) from profile where actor=? and active=true",Integer.class,actor)!=1)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Conclua seu perfil.");
     }
     @PostMapping("/preview") Map<String,Object> preview(@RequestParam("file") MultipartFile file) throws IOException {
