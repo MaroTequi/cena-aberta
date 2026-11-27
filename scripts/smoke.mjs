@@ -108,6 +108,14 @@ try {
   const anime=await request(catalog,"/titles?type=anime");
   assert.deepEqual(anime.items.map(item=>item.format).sort(),["movie","tv"]);
   assert.equal((await request(catalog,"/titles?query=mare")).items[0].id,"demo-mare-alta");
+  assert.deepEqual((await request(catalog,"/providers")).map(provider=>provider.id),[9001,9002,9003]);
+  assert.deepEqual((await request(catalog,"/titles/demo-mare-alta/providers")).stream.map(provider=>provider.name),["Cine Casa"]);
+  await request(catalog,"/titles/season-demo-mare-alta-s1/providers",{expected:404});
+  assert.equal((await request(catalog,"/titles/demo-mare-alta/trailer")).key,null);
+  await request(catalog,"/titles/season-demo-mare-alta-s1/trailer",{expected:404});
+  assert.deepEqual((await request(catalog,"/people?query=keanu")).items,[]);
+  await request(catalog,"/people?query=k",{expected:400});
+  assert.deepEqual((await request(catalog,"/title-batch?ids=demo-mare-alta,demo-ultimo-rolo&providers=9002")).map(title=>title.id),["demo-mare-alta"]);
   await new Promise((resolve,reject)=>{mock.once("error",reject);mock.listen(0,"127.0.0.1",resolve);});
   const realMode="http://127.0.0.1:19183";
   const tmdb=start("java",["-jar","services/catalog/target/catalog-0.1.0-alpha.jar",
@@ -248,6 +256,10 @@ try {
   const visibleRanking=await request(social,"/profiles/testador",{user:"demo_second_user"});
   assert.deepEqual(visibleRanking.ranking,[{title:"demo-mare-alta",tier:1,average:4}]);
   await request(social,"/me/visibility",{method:"PUT",body:{section:"ranking",visible:false}});
+  assert.deepEqual((await request(social,"/me/providers",{method:"PUT",body:{providers:[9002,9001,9002]}})).providers,[9001,9002]);
+  assert.deepEqual((await request(social,"/me/providers")).providers,[9001,9002]);
+  await request(social,"/me/providers",{method:"PUT",body:{providers:[0]},expected:400});
+  assert.deepEqual((await request(social,"/me/providers",{method:"PUT",body:{providers:[]}})).providers,[]);
   await request(social,"/me/library/demo-mare-alta/rating",{method:"PUT",body:{rating:10},expected:400});
   await request(social,laterEpisode,{method:"PUT",body:{rating:null}});
   await request(social,seriesVisibility,{method:"PUT",body:{value:false}});
@@ -476,8 +488,8 @@ try {
   assert.match(savedAvatar,/^data:image\/jpeg;base64,/);
   for(const page of [roomPage,await fetch(web+"/salas",{headers:accountHeaders})]){
     const html=await page.text();
-    const link=html.match(/<a[^>]+class="room-nav-button room-profile-link"[^>]*>[\s\S]*?<\/a>/)?.[0];
-    assert.ok(link?.includes('src="'+savedAvatar+'"'),"Sélete deve mostrar o avatar da conta no cabeçalho.");
+    const menu=html.match(/<button[^>]+class="account-menu-trigger"[^>]*>[\s\S]*?<\/button>/)?.[0];
+    assert.ok(menu?.includes('src="'+savedAvatar+'"'),"Sélete deve mostrar o avatar da conta no cabeçalho.");
   }
   const roomVisitor=await fetch(web+"/salas?sala="+createdRoom.id,{redirect:"manual"});
   assert.equal(roomVisitor.status,307);
@@ -489,6 +501,23 @@ try {
   assert.equal(specialLookup.status,200);
   assert.equal((await specialLookup.json()).profile.username,"maro fã / anime #1!");
   assert.equal((await fetch(web+"/api/v1/me/profile",{method:"PUT",headers:accountHeaders,body:JSON.stringify({username:"conta_teste",name:"Conta teste"})})).status,200);
+  const watchResponse=await fetch(web+"/api/v1/titles/demo-mare-alta/providers",{headers:accountHeaders});
+  assert.equal(watchResponse.status,200,"Onde assistir precisa passar pelo BFF.");
+  assert.deepEqual((await watchResponse.json()).stream.map(provider=>provider.id),[9002]);
+  const trailerResponse=await fetch(web+"/api/v1/titles/demo-mare-alta/trailer",{headers:accountHeaders});
+  assert.equal(trailerResponse.status,200,"O trailer precisa passar pelo BFF.");
+  assert.equal((await trailerResponse.json()).key,null);
+  const peopleResponse=await fetch(web+"/api/v1/people?query=keanu",{headers:accountHeaders});
+  assert.equal(peopleResponse.status,200,"A busca de pessoas precisa passar pelo BFF.");
+  assert.deepEqual((await peopleResponse.json()).items,[]);
+  const searchPage=await fetch(web+"/busca?q=mare&tipo=filmes",{headers:accountHeaders});
+  assert.equal(searchPage.status,200);
+  assert.match(await searchPage.text(),/Filmes, séries, animes ou pessoas/);
+  const searchVisitor=await fetch(web+"/busca?q=mare",{redirect:"manual"});
+  assert.equal(searchVisitor.status,307);
+  assert.equal(new URL(searchVisitor.headers.get("location"),web).searchParams.get("next"),"/busca?q=mare");
+  assert.equal((await fetch(web+"/api/v1/me/providers",{method:"PUT",headers:accountHeaders,body:JSON.stringify({providers:[9002]})})).status,200);
+  assert.deepEqual((await (await fetch(web+"/api/v1/me/providers",{headers:accountHeaders})).json()).providers,[9002]);
   const result=await fetch(web+"/api/v1/titles?type=anime",{headers:accountHeaders});
   assert.equal(result.status,200);
   assert.equal((await result.json()).items.length,2);
