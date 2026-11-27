@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' version '8.13.2' }
+
+android {
+    namespace 'br.com.cenaaberta.prototipo'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'br.com.cenaaberta.prototipo'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+    }
+}
