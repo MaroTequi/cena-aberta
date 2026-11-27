@@ -31,58 +31,91 @@ public class Titles {
 
     private final TitleSummaries summaries;
 
-    Titles(JdbcTemplate db, ObjectMapper mapper, TmdbClient tmdb, TitleSummaries summaries) {
-        this.db = db; this.mapper = mapper; this.tmdb = tmdb; this.summaries = summaries;
+    private final StreamingAvailability availability;
+
+    Titles(JdbcTemplate db, ObjectMapper mapper, TmdbClient tmdb, TitleSummaries summaries, StreamingAvailability availability) {
+        this.db = db; this.mapper = mapper; this.tmdb = tmdb; this.summaries = summaries; this.availability = availability;
     }
 
+    /**
+     * Lista ou busca obras. A busca tolera espaços repetidos, maiúsculas, acentos e erros de digitação: tenta o termo
+     * limpo, depois sem acentos e, se nada aparecer, procura pelo começo das palavras e fica só com os nomes parecidos.
+     * Nesse último caso a resposta traz {@code approximate=true} e não tem próxima página.
+     */
     @GetMapping("/titles")
-
     Map<String,Object> titles(@RequestParam(defaultValue="") String query, @RequestParam(defaultValue="all") String type,
-
                               @RequestParam(defaultValue="1") int page) {
-
         if (page < 1 || page > 500 || query.length() > 100 || !Set.of("all","movie","tv","anime").contains(type))
-
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-
+        String term = SearchTerms.clean(query);
         if (tmdb.demo()) {
-
-            var found = FIXTURES.stream().filter(t -> type.equals("all") || type.equals(t.format()) || type.equals("anime") && t.anime())
-
-                .filter(t -> TmdbMapper.normalize(t.name()).contains(TmdbMapper.normalize(query)) || TmdbMapper.normalize(t.original()).contains(TmdbMapper.normalize(query))).toList();
-
-            return Map.of("items",page == 1 ? found : List.of(),"hasMore",false,"demo",true);
-
-        }
-
-        List<Catalog.Title> found = new ArrayList<>();
-
-        boolean more = false;
-
-        for (String format : type.equals("movie") || type.equals("tv") ? List.of(type) : List.of("movie","tv")) {
-
-            String params = "&page=" + page + "&include_adult=false";
-
-            String path = query.isBlank() ? "/discover/" + format + "?sort_by=popularity.desc" + (type.equals("anime") ? "&with_genres=16&with_original_language=ja" : "") :
-
-                "/search/" + format + "?query=" + URLEncoder.encode(query,StandardCharsets.UTF_8);
-
-            JsonNode result = tmdb.remote(path + params);
-
-            more |= page < Math.min(result.path("total_pages").asInt(), 500);
-
-            for (JsonNode item : result.path("results")) {
-
-                Catalog.Title title = TmdbMapper.title(format,item);
-
-                if (!type.equals("anime") || title.anime()) { summaries.store(title,item); found.add(title); }
-
+            var kind = FIXTURES.stream().filter(t -> type.equals("all") || type.equals(t.format()) || type.equals("anime") && t.anime()).toList();
+            String folded = SearchTerms.fold(term);
+            var found = kind.stream().filter(t -> SearchTerms.fold(t.name()).contains(folded) || SearchTerms.fold(t.original()).contains(folded)).toList();
+            boolean approximate = false;
+            if (found.isEmpty() && !folded.isEmpty()) {
+                found = closest(kind, term);
+                approximate = !found.isEmpty();
             }
-
+            return Map.of("items",page == 1 ? found : List.of(),"hasMore",false,"demo",true,"approximate",approximate);
         }
+        if (term.isEmpty()) {
+            var listed = remote(type, "", page);
+            return Map.of("items",listed.titles(),"hasMore",listed.more(),"demo",false,"approximate",false);
+        }
+        var found = remote(type, term, page);
+        String folded = SearchTerms.fold(term);
+        if (page == 1 && found.titles().isEmpty() && !folded.equals(term.toLowerCase(java.util.Locale.ROOT))) found = remote(type, folded, 1);
+        if (page > 1 || !found.titles().isEmpty())
+            return Map.of("items",found.titles(),"hasMore",found.more(),"demo",false,"approximate",false);
+        String key = type + "|" + folded;
+        var cached = approximateCache.get(key);
+        if (cached != null && cached.getKey() > System.currentTimeMillis()) return cached.getValue();
+        var close = SearchTerms.firstClose(SearchTerms.attempts(term), attempt -> remote(type, attempt, 1).titles(),
+            candidates -> closest(distinct(candidates), term));
+        Map<String,Object> answer = Map.of("items",close,"hasMore",false,"demo",false,"approximate",!close.isEmpty());
+        if (approximateCache.size() >= 500) approximateCache.clear();
+        approximateCache.put(key, Map.entry(System.currentTimeMillis() + APPROXIMATE_TTL, answer));
+        return answer;
+    }
 
-        return Map.of("items",found,"hasMore",more,"demo",false);
+    /** Resultado das buscas aproximadas por 10 minutos, para o mesmo erro de digitação não refazer as consultas. */
+    private static final long APPROXIMATE_TTL = java.time.Duration.ofMinutes(10).toMillis();
+    private final Map<String,Map.Entry<Long,Map<String,Object>>> approximateCache = new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** Página de obras do TMDB: busca pelo termo ou, sem termo, as mais populares. */
+    private record Found(List<Catalog.Title> titles, boolean more) {}
+
+    private Found remote(String type, String term, int page) {
+        List<Catalog.Title> found = new ArrayList<>();
+        boolean more = false;
+        for (String format : type.equals("movie") || type.equals("tv") ? List.of(type) : List.of("movie","tv")) {
+            String params = "&page=" + page + "&include_adult=false";
+            String path = term.isBlank() ? "/discover/" + format + "?sort_by=popularity.desc" + (type.equals("anime") ? "&with_genres=16&with_original_language=ja" : "") :
+                "/search/" + format + "?query=" + URLEncoder.encode(term,StandardCharsets.UTF_8);
+            JsonNode result = tmdb.remote(path + params);
+            more |= page < Math.min(result.path("total_pages").asInt(), 500);
+            for (JsonNode item : result.path("results")) {
+                Catalog.Title title = TmdbMapper.title(format,item);
+                if (!type.equals("anime") || title.anime()) { summaries.store(title,item); found.add(title); }
+            }
+        }
+        return new Found(found, more);
+    }
+
+    private static List<Catalog.Title> distinct(List<Catalog.Title> titles) {
+        var unique = new LinkedHashMap<String,Catalog.Title>();
+        for (var title : titles) unique.putIfAbsent(title.id(), title);
+        return new ArrayList<>(unique.values());
+    }
+
+    /** Obras com nome parecido com o termo, da mais parecida para a menos; no máximo 20. */
+    private static List<Catalog.Title> closest(List<Catalog.Title> candidates, String term) {
+        return candidates.stream()
+            .map(title -> Map.entry(title, SearchTerms.similarity(term, title.name(), title.original())))
+            .filter(entry -> entry.getValue() >= SearchTerms.MIN_SIMILARITY)
+            .sorted(Map.Entry.<Catalog.Title,Double>comparingByValue().reversed())
+            .limit(20).map(Map.Entry::getKey).toList();
     }
 
     public record Season(int number,String name,String summary,String poster,String year) {}
@@ -260,10 +293,15 @@ public class Titles {
      * @param genre gênero único (legado) para filtrar; 0 = sem filtro
      * @param genres gêneros para filtrar
      * @param details quando true, cada obra traz {@code details} (gêneros e duração) para estatísticas
+     * @param providers serviços de streaming; quando informado, só voltam obras incluídas em algum deles
      * @return obras encontradas; ausentes são omitidas
      */
-    @GetMapping("/title-batch") List<Catalog.Title> batch(@RequestParam List<String> ids,@RequestParam(defaultValue="0") int genre,@RequestParam(required=false) List<Integer> genres,@RequestParam(defaultValue="false") boolean details) {
+    @GetMapping("/title-batch") List<Catalog.Title> batch(@RequestParam List<String> ids,@RequestParam(defaultValue="0") int genre,@RequestParam(required=false) List<Integer> genres,@RequestParam(defaultValue="false") boolean details,@RequestParam(required=false) List<Integer> providers) {
         var found=titleBatch(ids,genre,genres);
+        if(providers!=null&&!providers.isEmpty()) {
+            if(providers.size()>StreamingAvailability.MAX_FILTER_PROVIDERS)throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+            found=availability.onlyIncludedIn(found,new HashSet<>(providers));
+        }
         return details?withStoredDetails(found):found;
     }
 

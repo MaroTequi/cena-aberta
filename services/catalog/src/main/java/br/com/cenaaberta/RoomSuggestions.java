@@ -16,7 +16,11 @@ import static br.com.cenaaberta.Genres.*;
 @RestController
 public class RoomSuggestions {
 
-    record Suggestions(List<String> exclude,List<String> watched,List<String> liked,int page,Integer genre,List<Integer> genres,String type) {}
+    record Suggestions(List<String> exclude,List<String> watched,List<String> liked,int page,Integer genre,List<Integer> genres,String type,List<Integer> providers) {
+        Suggestions(List<String> exclude,List<String> watched,List<String> liked,int page,Integer genre,List<Integer> genres,String type) {
+            this(exclude,watched,liked,page,genre,genres,type,null);
+        }
+    }
     record Candidate(Catalog.Title title,JsonNode item,double score) {}
 
     private final JdbcTemplate db;
@@ -36,6 +40,12 @@ public class RoomSuggestions {
         if(input.page()<1||input.page()>499||input.exclude()==null||input.exclude().size()>1000||input.watched()==null||input.watched().size()>10000||input.liked()==null||input.liked().size()>1000)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         var genres=selectedGenres(input.genre(),input.genres());
+        // Serviços que a sala assina: quando informados, só entram obras incluídas em algum deles.
+        if(input.providers()!=null&&input.providers().stream().anyMatch(p->p==null||p<1))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Serviço de streaming inválido.");
+        Set<Integer> providers=input.providers()==null?Set.of():new TreeSet<>(input.providers());
+        if(providers.size()>StreamingAvailability.MAX_FILTER_PROVIDERS)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Serviço de streaming inválido.");
+        String providerFilter=providers.isEmpty()?"":"&watch_region="+StreamingAvailability.REGION+"&with_watch_monetization_types=flatrate%7Cfree%7Cads&with_watch_providers="
+            +providers.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("%7C"));
         var excluded=new HashSet<>(input.exclude());var watched=new HashSet<>(input.watched());
         var preferred=new HashSet<String>();
         for(String id:input.liked().stream().distinct().limit(40).toList()) {
@@ -45,7 +55,7 @@ public class RoomSuggestions {
         String type=input.type()==null?"movie":input.type();
         if(!Set.of("all","movie","tv","anime").contains(type))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Tipo de obra inválido.");
         var formats=type.equals("tv")||type.equals("movie")?List.of(type):List.of("movie","tv");
-        if(tmdb.demo())return Map.of("items",FIXTURES.stream().filter(t->formats.contains(t.format())&&(!type.equals("anime")||t.anime())&&!excluded.contains(t.id())&&(genres.isEmpty()||genres.stream().anyMatch(g->demoDetails(t.id()).genres().contains(GENRES.get(g))))).limit(20).toList(),"nextPage",input.page()+2);
+        if(tmdb.demo())return Map.of("items",FIXTURES.stream().filter(t->formats.contains(t.format())&&(!type.equals("anime")||t.anime())&&!excluded.contains(t.id())&&(providers.isEmpty()||StreamingAvailability.demoIncludedIn(t.id(),providers))&&(genres.isEmpty()||genres.stream().anyMatch(g->demoDetails(t.id()).genres().contains(GENRES.get(g))))).limit(20).toList(),"nextPage",input.page()+2);
         var buckets=new ArrayList<List<Candidate>>();
         var today=java.time.LocalDate.now(java.time.ZoneOffset.UTC);
         for(int tier=0;tier<3;tier++){
@@ -60,7 +70,7 @@ public class RoomSuggestions {
                 List<Integer> ids=roomGenreIds(format,genres);
                 String filter=ids.isEmpty()?"":"&with_genres="+ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("%7C"));
                 if(type.equals("anime"))filter="&with_original_language=ja&with_genres=16";
-                String path="/discover/"+format+"?include_adult=false&"+dateField+".lte="+today+"&"+sort+filter;
+                String path="/discover/"+format+"?include_adult=false&"+dateField+".lte="+today+"&"+sort+filter+providerFilter;
                 for(int page=input.page();page<input.page()+2;page++)for(var item:tmdb.remote(path+"&page="+page).path("results")){
                     String date=item.path(format.equals("tv")?"first_air_date":"release_date").asText();
                     Catalog.Title title=TmdbMapper.title(format,item);
