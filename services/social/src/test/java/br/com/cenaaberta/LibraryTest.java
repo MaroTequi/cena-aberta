@@ -17,9 +17,8 @@ class LibraryTest {
  db=new JdbcTemplate(source);
  db.update("insert into profile(actor,username,name) values(?,?,?)",ANA,"ana","Ana");
  var actors=new ActiveActors(db);
- var receipts=new IdempotencyReceipts(db,new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules());
  var entries=new LibraryEntries(db,id->id);
- service=new Library(db,actors,entries,new Diary(db,actors,receipts,entries,org.mockito.Mockito.mock(Episodes.class)));
+ service=new Library(db,actors,entries,new Viewings(db));
  }
  void assertFails(HttpStatus status,String message,Runnable call){
  var e=assertThrows(ResponseStatusException.class,call::run);

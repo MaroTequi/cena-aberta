@@ -19,10 +19,10 @@ public class Library {
     private final JdbcTemplate db;
     private final ActiveActors actors;
     private final LibraryEntries entries;
-    private final Diary diary;
+    private final Viewings viewings;
 
-    Library(JdbcTemplate db,ActiveActors actors,LibraryEntries entries,Diary diary) {
-        this.db=db; this.actors=actors; this.entries=entries; this.diary=diary;
+    Library(JdbcTemplate db,ActiveActors actors,LibraryEntries entries,Viewings viewings) {
+        this.db=db; this.actors=actors; this.entries=entries; this.viewings=viewings;
     }
 
     @PutMapping("/me/library/{id}/{action}")
@@ -141,7 +141,7 @@ public class Library {
 
                         OffsetDateTime watchedAt=OffsetDateTime.now(DIARY_ZONE);
 
-                        diary.insertViewing(actor,id,watchedAt.toLocalDate(),false,watchedAt);
+                        viewings.insert(actor,id,watchedAt.toLocalDate(),false,watchedAt);
 
                     }
 
@@ -162,7 +162,7 @@ public class Library {
     private void recordFirstViewing(String actor,String id,OffsetDateTime now) {
         db.update("update library set watched=true,interest=false where actor=? and title=?",actor,id);
         if(!Rows.exists(db,"select count(*) from viewing where actor=? and title=?",actor,id))
-            diary.insertViewing(actor,id,now.toLocalDate(),false,now);
+            viewings.insert(actor,id,now.toLocalDate(),false,now);
     }
 
 }

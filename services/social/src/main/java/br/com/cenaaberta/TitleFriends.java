@@ -36,7 +36,7 @@ public class TitleFriends {
                 (l.evaluation_public and not l.hidden) as public_evaluation,%s as spoiler
                 from library l join profile p on p.actor=l.actor
                 where l.title=? and l.actor in (%s) and p.active=true order by p.username limit 500
-                """.formatted(Social.EFFECTIVE_SPOILER,FRIENDS_OF),args.toArray())) {
+                """.formatted(Community.EFFECTIVE_SPOILER,FRIENDS_OF),args.toArray())) {
             // Cada campo segue a regra que já vale no perfil: assistido via show_watched, Vou ver via show_watchlist, nota/resenha só se públicas.
             boolean open=Boolean.TRUE.equals(row.get("public_evaluation"));
             boolean watched=Boolean.TRUE.equals(row.get("show_watched")) && Boolean.TRUE.equals(row.get("watched"));

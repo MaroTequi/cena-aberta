@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ReviewReactionsTest {
     static final String ANA="ana-12345678",BIA="bia-12345678",CAIO="caio-12345678",TITLE="demo-a";
-    JdbcTemplate db; ReviewReactions service; Social social;
+    JdbcTemplate db; ReviewReactions service; Community social;
 
     @BeforeEach void setup() {
         db=TestDatabase.migrated();
@@ -18,7 +18,7 @@ class ReviewReactionsTest {
         db.update("insert into library(actor,title,watched,rating,review,evaluation_public) values(?,?,true,8,'Resenha da Bia',true)",BIA,TITLE);
         var actors=new ActiveActors(db);
         service=new ReviewReactions(db,actors);
-        social=new Social(db,actors,new LibraryEntries(db,id -> "movie"),org.mockito.Mockito.mock(Ranking.class),TestDatabase.catalog("[]"));
+        social=new Community(db,actors,new LibraryEntries(db,id -> "movie"));
     }
 
     @Test void likeUnlikeAndCountsInReviews() {

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RecommendationsTest {
     static final String ANA="ana-12345678",BIA="bia-12345678",CAIO="caio-12345678";
-    JdbcTemplate db; Recommendations service; Social social;
+    JdbcTemplate db; Recommendations service; Notifications social;
 
     @BeforeEach void setup() {
         db=TestDatabase.migrated();
@@ -20,7 +20,7 @@ class RecommendationsTest {
         var catalog=TestDatabase.catalog("[{\"id\":\"demo-a\",\"format\":\"movie\",\"name\":\"Filme A\"},{\"id\":\"demo-b\",\"format\":\"movie\",\"name\":\"Filme B\"}]");
         var actors=new ActiveActors(db);
         service=new Recommendations(db,actors,catalog);
-        social=new Social(db,actors,new LibraryEntries(db,id -> "movie"),org.mockito.Mockito.mock(Ranking.class),catalog);
+        social=new Notifications(db,actors);
     }
 
     @SuppressWarnings("unchecked") List<Map<String,Object>> items(Map<String,Object> result) { return (List<Map<String,Object>>)result.get("items"); }

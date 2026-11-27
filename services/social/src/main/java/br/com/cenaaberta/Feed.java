@@ -79,7 +79,7 @@ public class Feed {
                 and l.evaluation_public=true and l.hidden=false and %5$s
               order by at desc,p.username,l.title limit ?) c
             order by at desc,kind,username,sid,title limit ?
-            """.formatted(FRIENDS_OF,Social.EFFECTIVE_SPOILER,
+            """.formatted(FRIENDS_OF,Community.EFFECTIVE_SPOILER,
                 after("coalesce(v.watched_at,v.created)","'watched'","p.username","v.id","v.title"),
                 after("l.rated_at","'rated'","p.username","''","l.title"),
                 after("l.reviewed_at","'reviewed'","p.username","''","l.title")),args.toArray());

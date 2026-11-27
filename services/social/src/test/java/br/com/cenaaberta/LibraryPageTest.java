@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Filtros e ordenação de /library-page, inclusive o que um visitante pode ver. */
 class LibraryPageTest {
     static final String ANA="ana-12345678",BIA="bia-12345678";
-    JdbcTemplate db; Social social;
+    JdbcTemplate db; LibraryPages social; Profiles profiles;
 
     @BeforeEach void setup() {
         db=TestDatabase.migrated();
@@ -21,7 +21,9 @@ class LibraryPageTest {
             [{"id":"demo-a","format":"movie","anime":false,"name":"Zebra","year":"1999"},
              {"id":"demo-b","format":"tv","anime":false,"name":"Ábaco","year":"2020"},
              {"id":"demo-c","format":"movie","anime":true,"name":"Bola","year":"2010"}]""");
-        social=new Social(db,new ActiveActors(db),new LibraryEntries(db,id -> "movie"),org.mockito.Mockito.mock(Ranking.class),catalog);
+        var actors=new ActiveActors(db);
+        social=new LibraryPages(db,actors,catalog,new ProfileVisibilities(db));
+        profiles=new Profiles(db,actors,org.mockito.Mockito.mock(Ranking.class),new Viewings(db),new ProfileVisibilities(db));
         db.update("insert into library(actor,title,watched,rating,evaluation_public) values(?,'demo-a',true,9,true),(?,'demo-b',true,null,true),(?,'demo-c',true,4,false)",ANA,ANA,ANA);
         db.update("insert into viewing(id,actor,title,watched_on,rewatch,created) values('v1',?,'demo-b',date '2025-01-01',false,?),('v2',?,'demo-c',date '2025-02-01',false,?)",
             ANA,OffsetDateTime.now().minusDays(2),ANA,OffsetDateTime.now().minusDays(1));
@@ -66,7 +68,7 @@ class LibraryPageTest {
     }
 
     @Test void listsVisibilityToggleAndAll() {
-        assertEquals(false,social.visibility(ANA,new Social.ProfileVisibility("lists",false)).get("lists"));
-        assertEquals(true,social.visibility(ANA,new Social.ProfileVisibility("all",true)).get("lists"));
+        assertEquals(false,profiles.visibility(ANA,new Profiles.ProfileVisibility("lists",false)).get("lists"));
+        assertEquals(true,profiles.visibility(ANA,new Profiles.ProfileVisibility("all",true)).get("lists"));
     }
 }
