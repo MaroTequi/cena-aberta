@@ -13,11 +13,10 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Testes de caracterização do Catalog: fixam o comportamento atual (modo demo e TMDB falso). */
+/** Testes de caracterização das obras do catálogo (Titles): fixam o comportamento atual (modo demo e TMDB falso). */
 class CatalogTest {
- static final String SECRET="x".repeat(24);
  JdbcTemplate db;HttpServer tmdb;volatile int status;volatile String body;
- Catalog catalog;
+ Titles catalog;
 
  @BeforeEach void setup() throws Exception {
  var source=new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1","sa","");
@@ -37,8 +36,9 @@ class CatalogTest {
  }
  @AfterEach void teardown(){tmdb.stop(0);}
 
- Catalog demo(){return new Catalog(db,new ObjectMapper(),SECRET,"","http://127.0.0.1:"+tmdb.getAddress().getPort());}
- Catalog remote(){return new Catalog(db,new ObjectMapper(),SECRET,"fake","http://127.0.0.1:"+tmdb.getAddress().getPort());}
+ Titles demo(){return titles("");}
+ Titles remote(){return titles("fake");}
+ Titles titles(String token){var mapper=new ObjectMapper();return new Titles(db,mapper,new TmdbClient(mapper,token,"http://127.0.0.1:"+tmdb.getAddress().getPort()),new TitleSummaries(db));}
  @SuppressWarnings("unchecked") static List<Catalog.Title> items(Map<String,Object> result){return (List<Catalog.Title>)result.get("items");}
 
  @Test void rejectsInvalidSearchParameters(){
@@ -46,9 +46,6 @@ class CatalogTest {
  ()->catalog.titles("","all",0),()->catalog.titles("","all",501),
  ()->catalog.titles("a".repeat(101),"all",1),()->catalog.titles("","x",1)))
  assertEquals(400,assertThrows(ResponseStatusException.class,call).getStatusCode().value());
- }
- @Test void constructorRejectsShortSecret(){
- assertThrows(IllegalArgumentException.class,()->new Catalog(db,new ObjectMapper(),"x".repeat(23),"","http://127.0.0.1:1"));
  }
  @Test void demoSearchIgnoresAccentsAndPagesBeyondOneAreEmpty(){
  var first=catalog.titles("ultimo","all",1);
