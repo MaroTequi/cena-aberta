@@ -76,6 +76,10 @@ Faça backup e copie-o para fora antes de atualizar. Siga o fluxo de homologaç�
 
 O GitHub Actions executa builds e testes da aplicação e um job ARM que compila o Compose, verifica saúde, faz backup e restaura em isolamento com dados descartáveis. SMTP real, TMDB real, acesso externo e disponibilidade da Oracle precisam ser validados no servidor.
 
+## Login com o Google
+
+Opcional. O passo a passo para criar o cliente OAuth de produção, colocar as chaves em `deploy/.env` e validar está em [LOGIN_GOOGLE.md](LOGIN_GOOGLE.md).
+
 ## Atualizar a lista de convidados
 
 Edite somente `INVITED_EMAILS` no arquivo privado. A aplicação lê essa variável ao criar o container. Reiniciar um container existente não carrega alterações do arquivo; recrie o serviço com os mesmos arquivos da implantação:
