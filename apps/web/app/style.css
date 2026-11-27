@@ -21,3 +21,6 @@
 @import "./styles/20-central-search.css";
 @import "./styles/21-header-search.css";
 @import "./styles/22-modal-scrollbars.css";
+@import "./styles/23-room-lobby.css";
+@import "./styles/24-settings.css";
+@import "./styles/25-room-voting.css";

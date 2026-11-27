@@ -13,6 +13,7 @@ export function StreamingServices() {
     [selected, setSelected] = useState<number[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [filter, setFilter] = useState(""),
     [notice, setNotice] = useState(""),
     [attempt, retry] = useState(0);
   useEffect(() => {
@@ -49,18 +50,31 @@ export function StreamingServices() {
       setBusy(false);
     }
   }
+  // O filtro ignora maiúsculas e acentos; a ordem é a do TMDB, para os botões não pularem ao marcar.
+  const fold = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const visible = (options ?? []).filter((provider) => fold(provider.name).includes(fold(filter.trim())));
   return (
-    <section className="form streaming-services" id="streamings">
-      <h2>Meus streamings</h2>
-      <p>
-        Marque os serviços que você assina. Eles ficam destacados em <strong>Onde assistir</strong> e valem para o
-        filtro <strong>Só o que a gente assina</strong> das salas.
-      </p>
+    <section className="form streaming-services" id="streamings" aria-label="Meus streamings">
+      <div className="streaming-toolbar">
+        <input
+          type="search"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Filtrar serviços…"
+          aria-label="Filtrar serviços de streaming"
+        />
+        <span className="streaming-count" role="status">
+          {selected.length === 1 ? "1 marcado" : selected.length + " marcados"}
+        </span>
+      </div>
       {!options && !error && <p role="status">Carregando serviços…</p>}
       {options && !options.length && <p className="muted">Nenhum serviço disponível no momento.</p>}
-      {options && options.length > 0 && (
+      {options && options.length > 0 && !visible.length && (
+        <p className="muted">Nenhum serviço com “{filter.trim()}”.</p>
+      )}
+      {options && options.length > 0 && !!visible.length && (
         <div className="provider-options" role="group" aria-label="Serviços de streaming">
-          {options.map((provider) => (
+          {visible.map((provider) => (
             <button
               type="button"
               key={provider.id}
